@@ -29,6 +29,7 @@ import org.bukkit.potion.PotionEffectType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, TabExecutor {
     private NamespacedKey customKey;
@@ -116,6 +117,20 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         if (customLevel(weapon,"cobweb") > 0 && ready(player,"cobweb",60)) trapTarget(target);
         if (customLevel(weapon,"storm") > 0 && ready(player,"storm",100)) { target.getWorld().strikeLightningEffect(target.getLocation()); target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 1)); }
         if (customLevel(weapon,"nulled") > 0 && ready(player,"nulled",70)) target.getActivePotionEffects().forEach(effect -> target.removePotionEffect(effect.getType()));
+        int craving = customLevel(weapon, "craving");
+        if (craving > 0 && target instanceof Player victim && ready(player,"craving",50)) victim.setFoodLevel(Math.max(0, victim.getFoodLevel() - craving));
+        int emnity = customLevel(weapon, "emnity");
+        if (emnity > 0 && ready(player,"emnity",45)) target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 20 * (1 + emnity), Math.min(1, emnity - 1), true, false, true));
+        int grimoire = customLevel(weapon, "grimoire");
+        if (grimoire > 0 && ready(player,"grimoire",65)) castGrimoire(player, target, grimoire);
+        int hail = customLevel(weapon, "hail_storm");
+        if (hail > 0 && ready(player,"hail_storm",90)) castHail(target, hail);
+        int illusion = customLevel(weapon, "illusion");
+        if (illusion > 0 && ready(player,"illusion",80)) { player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, 20 * (1 + illusion), 0, true, false, true)); player.getWorld().spawnParticle(Particle.PORTAL, player.getLocation().add(0,1,0), 24,.4,.6,.4,.1); }
+        int implant = customLevel(weapon, "implant");
+        if (implant > 0 && ready(player,"implant",40)) player.giveExp(implant * 2);
+        int steal = customLevel(weapon, "steal");
+        if (steal > 0 && target instanceof Player victim && ready(player,"steal",60)) { int amount=Math.min(steal, victim.getFoodLevel()); victim.setFoodLevel(victim.getFoodLevel()-amount); player.setFoodLevel(Math.min(20,player.getFoodLevel()+amount)); }
         int wind = customLevel(weapon, "wind_burst");
         if (wind > 0 && enabled("wind_burst") && weapon.getType() == Material.MACE && ready(player, "wind_burst", getConfig().getLong("custom-enchants.wind_burst.cooldown-ticks", 220))) {
             windUntil.put(player.getUniqueId(), tick() + getConfig().getLong("custom-enchants.wind_burst.duration-ticks", 80));
@@ -254,6 +269,9 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private void applyPassive(Player player, String id, PotionEffectType effect, int seconds, int baseAmplifier) { int level=highest(player,id); if(level>0 && enabled(id)) player.addPotionEffect(new PotionEffect(effect, seconds*20, baseAmplifier + Math.min(2, level-1), true, false, true)); }
     private void repairHeldItem(Player player, int level) { ItemStack item=player.getInventory().getItemInMainHand(); if(item.getItemMeta() instanceof org.bukkit.inventory.meta.Damageable damage && damage.hasDamage()) { damage.setDamage(Math.max(0,damage.getDamage()-Math.max(1,level))); item.setItemMeta(damage); } }
     private void trapTarget(LivingEntity target) { Location at=target.getLocation().getBlock().getLocation(); if(at.getBlock().getType().isAir()) { at.getBlock().setType(Material.COBWEB); getServer().getScheduler().runTaskLater(this,()->{if(at.getBlock().getType()==Material.COBWEB)at.getBlock().setType(Material.AIR);},60L); } }
+    private void castGrimoire(Player caster, LivingEntity target, int level) { switch (getRandom().nextInt(3)) { case 0 -> target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20 * (2 + level), 0)); case 1 -> target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 20 * (2 + level), 0)); default -> { caster.setHealth(Math.min(caster.getMaxHealth(), caster.getHealth() + level * .5)); target.setFireTicks(20 * level); } } caster.getWorld().spawnParticle(Particle.ENCHANT, target.getLocation().add(0,1,0), 18,.35,.5,.35,.1); }
+    private void castHail(LivingEntity target, int level) { Location at=target.getLocation().add(0,1,0); target.getWorld().spawnParticle(Particle.SNOWFLAKE, at, 35 + level * 10,.7,.9,.7,.04); target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20 * (2 + level), Math.min(2,level-1))); target.damage(Math.min(3, level * .75)); }
+    private Random getRandom() { return ThreadLocalRandom.current(); }
     private void markNearbyOres(Player player, int level) { Location base=player.getLocation(); int radius=Math.min(10,3+level*2); int found=0; for(int x=-radius;x<=radius&&found<12;x++)for(int y=-3;y<=3&&found<12;y++)for(int z=-radius;z<=radius&&found<12;z++){ Block block=base.clone().add(x,y,z).getBlock(); if(block.getType().name().endsWith("_ORE")){player.spawnParticle(Particle.END_ROD,block.getLocation().add(.5,.5,.5),1,0,0,0,0);found++;}} }
     private boolean has(Player player, String id) { return highest(player,id)>0; }
     private int highest(Player player, String id) { int highest=customLevel(player.getInventory().getItemInMainHand(),id); highest=Math.max(highest,customLevel(player.getInventory().getItemInOffHand(),id)); for(ItemStack item:player.getInventory().getArmorContents()) highest=Math.max(highest,customLevel(item,id)); return highest; }
