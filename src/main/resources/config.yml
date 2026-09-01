@@ -17,6 +17,13 @@ overlevel:
 # If matching Excellent enchant is on the same item, Veliora's duplicate effect is not applied.
 excellent-enchants-bridge:
   enabled: true
+
+# ExcellentEnchants-only compatibility. These effects heal only on a confirmed kill.
+excellent-vampire:
+  enabled: true
+  max-level: 3
+  heal-per-level: 2.0 # 2 health = 1 heart per level
+  cooldown-ticks: 60 # 3 seconds
 custom-enchants:
   # Other catalogue entries are added automatically with their balanced max level on first startup.
   lifesteal: { enabled: true, max-level: 5, heal-per-level: 0.35, cooldown-ticks: 20 }

@@ -141,6 +141,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         if (implant > 0 && ready(player,"implant",40)) player.giveExp(implant * 2);
         int steal = customLevel(weapon, "steal");
         if (steal > 0 && target instanceof Player victim && ready(player,"steal",60)) { int amount=Math.min(steal, victim.getFoodLevel()); victim.setFoodLevel(victim.getFoodLevel()-amount); player.setFoodLevel(Math.min(20,player.getFoodLevel()+amount)); }
+        if (event.getFinalDamage() >= target.getHealth()) applyExcellentKillHeal(player, weapon, "vampire", "vampire");
         int wind = customLevel(weapon, "wind_burst");
         if (wind > 0 && enabled("wind_burst") && weapon.getType() == Material.MACE && ready(player, "wind_burst", getConfig().getLong("custom-enchants.wind_burst.cooldown-ticks", 220))) {
             windUntil.put(player.getUniqueId(), tick() + getConfig().getLong("custom-enchants.wind_burst.duration-ticks", 80));
@@ -175,6 +176,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         int blind = customLevel(bow, "blinding_arrow"); if (blind > 0 && ready(player,"blinding_arrow",35)) target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 20 * blind, 0));
         int frost = customLevel(bow, "frost_arrow"); if (frost > 0 && ready(player,"frost_arrow",35)) target.setFreezeTicks(Math.min(140, target.getFreezeTicks() + frost * 30));
         int focus = customLevel(bow, "focus_fire"); if (focus > 0) event.setDamage(event.getDamage() * (1 + focus * .08));
+        if (event.getFinalDamage() >= target.getHealth()) applyExcellentKillHeal(player, bow, "vampiricarrows", "vampiric_arrows");
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -324,6 +326,22 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         };
         if (equivalents.isEmpty()) return false;
         return item.getEnchantments().keySet().stream().anyMatch(enchant -> equivalents.contains(enchant.getKey().getKey().replace("_", "").toLowerCase(Locale.ROOT)));
+    }
+    private int excellentLevel(ItemStack item, String id) {
+        if (!excellentEnchantsPresent || item == null) return 0;
+        String requested=id.replace("_", "").toLowerCase(Locale.ROOT);
+        return item.getEnchantments().entrySet().stream()
+            .filter(entry -> entry.getKey().getKey().getKey().replace("_", "").equalsIgnoreCase(requested))
+            .mapToInt(Map.Entry::getValue).max().orElse(0);
+    }
+    private void applyExcellentKillHeal(Player player, ItemStack item, String excellentId, String cooldownId) {
+        if (!getConfig().getBoolean("excellent-vampire.enabled", true)) return;
+        int level=Math.min(getConfig().getInt("excellent-vampire.max-level",3), excellentLevel(item,excellentId));
+        if (level <= 0 || !ready(player,cooldownId,getConfig().getLong("excellent-vampire.cooldown-ticks",60))) return;
+        double healed=level*getConfig().getDouble("excellent-vampire.heal-per-level",2.0);
+        player.setHealth(Math.min(player.getMaxHealth(),player.getHealth()+healed));
+        player.getWorld().spawnParticle(Particle.HEART,player.getLocation().add(0,1,0),Math.min(8,level*2),.3,.35,.3,0);
+        player.playSound(player.getLocation(),Sound.ENTITY_PLAYER_LEVELUP,.35f,1.6f);
     }
     private ItemStack createBook(String id, int level) { ItemStack book=new ItemStack(Material.ENCHANTED_BOOK); ItemMeta meta=book.getItemMeta(); meta.getPersistentDataContainer().set(customKey, PersistentDataType.STRING, id); meta.getPersistentDataContainer().set(customKey(id),PersistentDataType.INTEGER,level); meta.displayName(Component.text(pretty(id)+" "+roman(level), NamedTextColor.AQUA)); meta.lore(List.of(Component.text("Gabungkan di anvil dengan item yang sesuai.",NamedTextColor.DARK_GRAY))); book.setItemMeta(meta); return book; }
     private NamespacedKey customKey(String id) { return new NamespacedKey(this, "ce_" + id); }
