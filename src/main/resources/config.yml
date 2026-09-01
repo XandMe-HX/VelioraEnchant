@@ -27,6 +27,14 @@ excellent-vampire:
 
 fishing:
   enabled: true
+  rarity:
+    common: 55.0
+    rare: 28.0
+    epic: 12.0
+    legendary: 4.5
+    mythic: 0.45
+    secret: 0.05
+  secret-catch-chance: 0.0005 # 0.05% when using Veliora Secret I
   # Formula: ADD = Base + Per_Level × (level - 1); MULTIPLY = Base × Per_Level^(level - 1).
   modifiers:
     catch-xp: { Base: 2.0, Per_Level: 1.0, Capacity: 8.0, Action: ADD }
