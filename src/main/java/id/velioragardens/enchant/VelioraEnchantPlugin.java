@@ -23,6 +23,7 @@ import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.world.LootGenerateEvent;
+import org.bukkit.event.entity.VillagerAcquireTradeEvent;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
@@ -304,6 +305,17 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         ItemMeta meta=book.getItemMeta(); meta.getPersistentDataContainer().set(new NamespacedKey(this,"distribution_book"),PersistentDataType.BYTE,(byte)1); book.setItemMeta(meta);
         event.getLoot().add(book);
     }
+    @EventHandler(ignoreCancelled = true)
+    public void onVillagerTrade(VillagerAcquireTradeEvent event) {
+        if (!(event.getEntity() instanceof Villager villager)) return;
+        if (villager.getProfession()==Villager.Profession.LIBRARIAN && villager.getVillagerLevel()>=4 && distributionPolicy.enabled(DistributionPolicy.Source.LIBRARIAN) && Math.random()<distributionPolicy.chance(DistributionPolicy.Source.LIBRARIAN)) {
+            FishingRarity cap=villager.getVillagerLevel()>=5?distributionPolicy.cap(DistributionPolicy.Source.LIBRARIAN):FishingRarity.RARE;
+            event.setRecipe(specialRecipe(rollLibrarianBook(cap),villager.getVillagerLevel()>=5?getConfig().getInt("distribution.librarian.master-price",48):getConfig().getInt("distribution.librarian.expert-price",32),Material.BOOK));
+        }
+        if (villager.getProfession()==Villager.Profession.FISHERMAN && villager.getVillagerLevel()>=5 && distributionPolicy.enabled(DistributionPolicy.Source.FISHERMAN) && Math.random()<distributionPolicy.chance(DistributionPolicy.Source.FISHERMAN)) {
+            event.setRecipe(specialRecipe(rollFishingBook(distributionPolicy.cap(DistributionPolicy.Source.FISHERMAN)),getConfig().getInt("distribution.fisherman.master-price",32),Material.FISHING_ROD));
+        }
+    }
 
     private void applyPassiveEffects() {
         for (Player player : Bukkit.getOnlinePlayers()) {
@@ -342,6 +354,8 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private FishingRarity rollFishingRarity(FishingRarity cap) { double total=0; for(FishingRarity rarity:FishingRarity.values()){if(rarity.ordinal()>cap.ordinal())break;total+=getConfig().getDouble("fishing.rarity."+rarity.id, switch(rarity){case COMMON->55;case RARE->28;case EPIC->12;case LEGENDARY->4.5;case MYTHIC->.45;case SECRET->.05;});} double roll=Math.random()*total, current=0; for(FishingRarity rarity:FishingRarity.values()){if(rarity.ordinal()>cap.ordinal())break;current+=getConfig().getDouble("fishing.rarity."+rarity.id,0);if(roll<current)return rarity;} return FishingRarity.COMMON; }
     private ItemStack rollFishingBook() { return rollFishingBook(FishingRarity.SECRET); }
     private ItemStack rollFishingBook(FishingRarity cap) { FishingRarity rarity=rollFishingRarity(cap); String id=rarity.enchantments.get(getRandom().nextInt(rarity.enchantments.size())); int level=rarity==FishingRarity.COMMON||rarity==FishingRarity.RARE||rarity==FishingRarity.EPIC?1+getRandom().nextInt(Math.min(3,defaultMaxLevel(LegacyEnchant.find(id).orElseThrow()))):1; ItemStack book=createBook(id,level); ItemMeta meta=book.getItemMeta(); meta.displayName(Component.text("["+rarity.id.toUpperCase(Locale.ROOT)+"] "+pretty(id)+" "+roman(level),rarity.color)); book.setItemMeta(meta); return book; }
+    private ItemStack rollLibrarianBook(FishingRarity cap) { List<String> ids=switch(cap){case COMMON->List.of("speed","haste_aura","night_vision","water_breathing");case RARE->List.of("lifesteal","bleed","poison","critical","regeneration");default->List.of("barrier","tank","protection","fire_boots","shield_resistance");}; String id=ids.get(getRandom().nextInt(ids.size())); return createBook(id,1); }
+    private MerchantRecipe specialRecipe(ItemStack result,int emeralds,Material material) { MerchantRecipe recipe=new MerchantRecipe(result,1); recipe.addIngredient(new ItemStack(Material.EMERALD,Math.min(64,Math.max(1,emeralds)))); recipe.addIngredient(new ItemStack(material)); return recipe; }
     private void openFishingMenu(Player player) {
         Inventory inventory=Bukkit.createInventory(new FishingMenuHolder(),54,FISHING_MENU_TITLE);
         ItemStack border=new ItemStack(Material.GRAY_STAINED_GLASS_PANE); ItemMeta borderMeta=border.getItemMeta(); borderMeta.displayName(Component.empty()); border.setItemMeta(borderMeta);
