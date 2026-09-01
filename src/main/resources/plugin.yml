@@ -6,7 +6,9 @@ author: XandMe-HX
 description: Safe, configurable custom enchantments for Veliora Gardens.
 commands:
   velioraenchant:
-    aliases: [venchant, overenchant]
+    description: Manage Veliora custom enchantments.
+    usage: /<command> give <player> <enchant> <level> | /<command> reload
+    aliases: [venchant, ce, enchants, customenchant, customenchants, overenchant, enchantshop, es]
     permission: velioraenchant.admin
 permissions:
   velioraenchant.admin:
