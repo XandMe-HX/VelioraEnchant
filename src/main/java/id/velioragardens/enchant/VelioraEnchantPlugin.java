@@ -20,6 +20,7 @@ import org.bukkit.event.inventory.PrepareAnvilEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
@@ -261,6 +262,25 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     @EventHandler(ignoreCancelled = true)
     public void onConsume(PlayerItemConsumeEvent event) { Player player=event.getPlayer(); int pocket=highest(player,"food_pocket"); if(pocket>0) { player.setFoodLevel(Math.min(20,player.getFoodLevel()+pocket)); player.setSaturation(Math.min(20f,player.getSaturation()+pocket*.5f)); } }
 
+    @EventHandler(ignoreCancelled = true)
+    public void onFish(PlayerFishEvent event) {
+        if (!getConfig().getBoolean("fishing.enabled", true)) return;
+        Player player=event.getPlayer(); ItemStack rod=player.getInventory().getItemInMainHand().getType()==Material.FISHING_ROD ? player.getInventory().getItemInMainHand() : player.getInventory().getItemInOffHand();
+        if (rod.getType()!=Material.FISHING_ROD) return;
+        if (event.getState()==PlayerFishEvent.State.BITE && customLevel(rod,"auto_reel")>0 && ready(player,"auto_reel",10)) { player.sendActionBar(Component.text("✦ Ikan menggigit!",NamedTextColor.AQUA)); player.playSound(player.getLocation(),Sound.ENTITY_FISHING_BOBBER_SPLASH,.8f,1.5f); return; }
+        if (event.getState()==PlayerFishEvent.State.CAUGHT_ENTITY && event.getCaught() instanceof LivingEntity caught) { int guardian=customLevel(rod,"guardian_hook"); if(guardian>0&&ready(player,"guardian_hook",45)){caught.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,20*(2+guardian),Math.min(2,guardian-1))); caught.getWorld().spawnParticle(Particle.BUBBLE,caught.getLocation().add(0,1,0),16,.3,.45,.3,.05);} return; }
+        if (event.getState()!=PlayerFishEvent.State.CAUGHT_FISH || !(event.getCaught() instanceof Item caught)) return;
+        int deep=customLevel(rod,"deep_hook"); if(deep>0) player.giveExp((int)Math.round(modifier("catch-xp",2,1,8).value(deep)));
+        int heal=customLevel(rod,"fisherman_heal"); if(heal>0&&ready(player,"fisherman_heal",40)){player.setHealth(Math.min(player.getMaxHealth(),player.getHealth()+modifier("heal",2,1,6).value(heal))); player.getWorld().spawnParticle(Particle.HEART,player.getLocation().add(0,1,0),2,.2,.25,.2,0);}
+        int chanceLevel=Math.max(customLevel(rod,"double_catch"),customLevel(rod,"angler_luck"));
+        if(chanceLevel>0&&Math.random()<modifier("double-catch-chance",.08,.04,.20).value(chanceLevel)){ItemStack copy=caught.getItemStack().clone(); player.getInventory().addItem(copy).values().forEach(left->player.getWorld().dropItemNaturally(player.getLocation(),left)); player.playSound(player.getLocation(),Sound.ENTITY_EXPERIENCE_ORB_PICKUP,.45f,1.7f);}
+        boolean ocean=isBiome(player,"OCEAN"), river=isBiome(player,"RIVER");
+        int oceanLevel=customLevel(rod,"ocean_blessing"), riverLevel=customLevel(rod,"river_spirit"), treasure=customLevel(rod,"treasure_hook");
+        if (river&&riverLevel>0) player.giveExp(2*riverLevel);
+        double treasureChance=(treasure>0?modifier("treasure-chance",.03,.02,.10).value(treasure):0)+(ocean?oceanLevel*.015:0);
+        if(treasureChance>0&&Math.random()<treasureChance){ItemStack bonus=new ItemStack(Material.NAUTILUS_SHELL,1); player.getInventory().addItem(bonus).values().forEach(left->player.getWorld().dropItemNaturally(player.getLocation(),left)); player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER,player.getLocation().add(0,1,0),12,.3,.45,.3,.02);}
+    }
+
     private void applyPassiveEffects() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             applyPassive(player, "speed", PotionEffectType.SPEED, 30, 0);
@@ -291,6 +311,8 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private void castGrimoire(Player caster, LivingEntity target, int level) { switch (getRandom().nextInt(3)) { case 0 -> target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20 * (2 + level), 0)); case 1 -> target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 20 * (2 + level), 0)); default -> { caster.setHealth(Math.min(caster.getMaxHealth(), caster.getHealth() + level * .5)); target.setFireTicks(20 * level); } } caster.getWorld().spawnParticle(Particle.ENCHANT, target.getLocation().add(0,1,0), 18,.35,.5,.35,.1); }
     private void castHail(LivingEntity target, int level) { Location at=target.getLocation().add(0,1,0); target.getWorld().spawnParticle(Particle.SNOWFLAKE, at, 35 + level * 10,.7,.9,.7,.04); target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20 * (2 + level), Math.min(2,level-1))); target.damage(Math.min(3, level * .75)); }
     private Random getRandom() { return ThreadLocalRandom.current(); }
+    private LevelModifier modifier(String key,double base,double perLevel,double capacity) { return LevelModifier.from(getConfig().getConfigurationSection("fishing.modifiers."+key),base,perLevel,capacity,LevelModifier.Action.ADD); }
+    private boolean isBiome(Player player,String token) { return player.getLocation().getBlock().getBiome().getKey().getKey().toUpperCase(Locale.ROOT).contains(token); }
     private boolean has(Player player, String id) { return highest(player,id)>0; }
     private int highest(Player player, String id) { int highest=customLevel(player.getInventory().getItemInMainHand(),id); highest=Math.max(highest,customLevel(player.getInventory().getItemInOffHand(),id)); for(ItemStack item:player.getInventory().getArmorContents()) highest=Math.max(highest,customLevel(item,id)); return highest; }
 
