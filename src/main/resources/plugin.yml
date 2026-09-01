@@ -1,0 +1,13 @@
+name: VelioraEnchant
+version: '1.0.0'
+main: id.velioragardens.enchant.VelioraEnchantPlugin
+api-version: '1.21'
+author: XandMe-HX
+description: Safe, configurable custom enchantments for Veliora Gardens.
+commands:
+  velioraenchant:
+    aliases: [venchant, overenchant]
+    permission: velioraenchant.admin
+permissions:
+  velioraenchant.admin:
+    default: op
