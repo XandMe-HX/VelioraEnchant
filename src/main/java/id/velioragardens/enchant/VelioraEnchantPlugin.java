@@ -47,6 +47,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private final Map<String, Enchantment> overlevel = new LinkedHashMap<>();
     private boolean excellentEnchantsPresent;
     private DistributionPolicy distributionPolicy;
+    private NamespacedKey villagerTradeMarkerKey;
     private static final Component FISHING_MENU_TITLE=Component.text("✦ Veliora Fishing Enchants",NamedTextColor.AQUA);
 
     @Override public void onEnable() {
@@ -63,6 +64,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         saveConfig();
         distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution"));
         customKey = new NamespacedKey(this, "custom_enchant");
+        villagerTradeMarkerKey = new NamespacedKey(this,"custom_trade_added");
         overlevel.put("sharpness", Enchantment.SHARPNESS);
         overlevel.put("impaling", Enchantment.IMPALING);
         overlevel.put("protection", Enchantment.PROTECTION);
@@ -308,12 +310,15 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     @EventHandler(ignoreCancelled = true)
     public void onVillagerTrade(VillagerAcquireTradeEvent event) {
         if (!(event.getEntity() instanceof Villager villager)) return;
+        if (villager.getPersistentDataContainer().has(villagerTradeMarkerKey,PersistentDataType.BYTE)) return;
         if (villager.getProfession()==Villager.Profession.LIBRARIAN && villager.getVillagerLevel()>=4 && distributionPolicy.enabled(DistributionPolicy.Source.LIBRARIAN) && Math.random()<distributionPolicy.chance(DistributionPolicy.Source.LIBRARIAN)) {
             FishingRarity cap=villager.getVillagerLevel()>=5?distributionPolicy.cap(DistributionPolicy.Source.LIBRARIAN):FishingRarity.RARE;
             event.setRecipe(specialRecipe(rollLibrarianBook(cap),villager.getVillagerLevel()>=5?getConfig().getInt("distribution.librarian.master-price",48):getConfig().getInt("distribution.librarian.expert-price",32),Material.BOOK));
+            villager.getPersistentDataContainer().set(villagerTradeMarkerKey,PersistentDataType.BYTE,(byte)1);
         }
         if (villager.getProfession()==Villager.Profession.FISHERMAN && villager.getVillagerLevel()>=5 && distributionPolicy.enabled(DistributionPolicy.Source.FISHERMAN) && Math.random()<distributionPolicy.chance(DistributionPolicy.Source.FISHERMAN)) {
             event.setRecipe(specialRecipe(rollFishingBook(distributionPolicy.cap(DistributionPolicy.Source.FISHERMAN)),getConfig().getInt("distribution.fisherman.master-price",32),Material.FISHING_ROD));
+            villager.getPersistentDataContainer().set(villagerTradeMarkerKey,PersistentDataType.BYTE,(byte)1);
         }
     }
 

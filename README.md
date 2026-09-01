@@ -23,4 +23,8 @@ Use `/ce menu` to browse the fishing-rod catalogue safely. It is a read-only men
 
 Common 55%, Rare 28%, Epic 12%, Legendary 4.5%, Mythic 0.45%, Secret 0.05%. These values and every per-level modifier are configurable in `config.yml`.
 
+## Distribution safety
+
+Structure loot and villager trades are disabled by default. Structure loot only injects one book into whitelisted vanilla structure loot tables. A Librarian or Fisherman can receive only one Veliora custom offer in its lifetime, and all normal distribution sources are hard-capped at Epic; Mythic and Secret are never distributed through loot tables or villager trades.
+
 `vanish` is intentionally not available in VelioraEnchant because permanent invisibility is not balanced for the server.
