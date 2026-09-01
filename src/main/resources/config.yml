@@ -1,0 +1,21 @@
+# VelioraEnchant 1.0.0 - Paper 1.21.8+
+# Old V1 names retained as safe enchant books; V2's high-level vanilla system is included too.
+overlevel:
+  enabled: true
+  bypass-too-expensive: true
+  caps:
+    sharpness: 10
+    impaling: 10
+    protection: 10
+    fire_protection: 10
+    blast_protection: 10
+    projectile_protection: 10
+    thorns: 8
+    density: 8
+custom-enchants:
+  lifesteal: { enabled: true, max-level: 5, heal-per-level: 0.35, cooldown-ticks: 20 }
+  autosmelt: { enabled: true, max-level: 1 }
+  telepathy: { enabled: true, max-level: 1 }
+  vein: { enabled: true, max-level: 3, max-blocks-per-level: 12 }
+  shield_resistance: { enabled: true, max-level: 5, reduction-per-level: 0.10 }
+  wind_burst: { enabled: true, max-level: 3, fall-reduction-per-level: 0.10, duration-ticks: 80, cooldown-ticks: 220 }
