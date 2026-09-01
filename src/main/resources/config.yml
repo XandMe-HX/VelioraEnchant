@@ -12,10 +12,64 @@ overlevel:
     projectile_protection: 10
     thorns: 8
     density: 8
+
+# Optional: only has an effect when ExcellentEnchants is installed.
+# If matching Excellent enchant is on the same item, Veliora's duplicate effect is not applied.
+excellent-enchants-bridge:
+  enabled: true
+
+# ExcellentEnchants-only compatibility. These effects heal only on a confirmed kill.
+excellent-vampire:
+  enabled: true
+  max-level: 3
+  heal-per-level: 2.0 # 2 health = 1 heart per level
+  cooldown-ticks: 60 # 3 seconds
+
+fishing:
+  enabled: true
+  rarity:
+    common: 55.0
+    rare: 28.0
+    epic: 12.0
+    legendary: 4.5
+    mythic: 0.45
+    secret: 0.05
+  secret-catch-chance: 0.0005 # 0.05% when using Veliora Secret I
+  # Formula: ADD = Base + Per_Level × (level - 1); MULTIPLY = Base × Per_Level^(level - 1).
+  modifiers:
+    catch-xp: { Base: 2.0, Per_Level: 1.0, Capacity: 8.0, Action: ADD }
+    double-catch-chance: { Base: 0.08, Per_Level: 0.04, Capacity: 0.20, Action: ADD }
+    treasure-chance: { Base: 0.03, Per_Level: 0.02, Capacity: 0.10, Action: ADD }
+    heal: { Base: 2.0, Per_Level: 1.0, Capacity: 6.0, Action: ADD }
+
+# Distribution is disabled by default until each source is reviewed.
+distribution:
+  structure-loot:
+    enabled: false
+    chance: 0.0075 # 0.75% per eligible generated container
+    rarity-cap: EPIC
+    allowed-tables:
+      - minecraft:chests/simple_dungeon
+      - minecraft:chests/abandoned_mineshaft
+      - minecraft:chests/desert_pyramid
+      - minecraft:chests/shipwreck_treasure
+      - minecraft:chests/ancient_city
+      - minecraft:chests/bastion_treasure
+  librarian:
+    enabled: false
+    chance: 0.30
+    rarity-cap: EPIC
+    expert-price: 32
+    master-price: 48
+  fisherman:
+    enabled: false
+    chance: 0.30
+    rarity-cap: EPIC
+    master-price: 32
 custom-enchants:
+  # Other catalogue entries are added automatically with their balanced max level on first startup.
   lifesteal: { enabled: true, max-level: 5, heal-per-level: 0.35, cooldown-ticks: 20 }
   autosmelt: { enabled: true, max-level: 1 }
   telepathy: { enabled: true, max-level: 1 }
-  vein: { enabled: true, max-level: 3, max-blocks-per-level: 12 }
   shield_resistance: { enabled: true, max-level: 5, reduction-per-level: 0.10 }
   wind_burst: { enabled: true, max-level: 3, fall-reduction-per-level: 0.10, duration-ticks: 80, cooldown-ticks: 220 }

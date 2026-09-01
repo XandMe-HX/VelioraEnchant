@@ -17,9 +17,12 @@ enum LegacyEnchant {
     POISONOUS_THORNS(Category.ARMOR), PROTECTION(Category.ARMOR), REGAIN(Category.ARMOR), REGENERATION(Category.ARMOR), SATURATION(Category.ARMOR), SECOND_LIFE(Category.ARMOR), SHARPEN(Category.WEAPON),
     SLOW_FALL(Category.ARMOR), SOUL_EATER(Category.WEAPON), SPEED(Category.ARMOR), STEAL(Category.WEAPON), STELLA(Category.ARMOR), STORM(Category.WEAPON), STURDY(Category.ARMOR),
     SUDDEN_BLOW(Category.WEAPON), TANK(Category.ARMOR), TELEPATHY(Category.TOOL), TIME_TRAVEL(Category.ARMOR), UNBREAKING(Category.TOOL),
-    WATER_BREATHING(Category.ARMOR), WIND_STRIKE(Category.WEAPON), SHIELD_RESISTANCE(Category.SHIELD), WIND_BURST(Category.MACE);
+    WATER_BREATHING(Category.ARMOR), WIND_STRIKE(Category.WEAPON), SHIELD_RESISTANCE(Category.SHIELD), WIND_BURST(Category.MACE),
+    ANGLER_LUCK(Category.FISHING_ROD), DEEP_HOOK(Category.FISHING_ROD), DOUBLE_CATCH(Category.FISHING_ROD), FISHERMAN_HEAL(Category.FISHING_ROD), TREASURE_HOOK(Category.FISHING_ROD),
+    AUTO_REEL(Category.FISHING_ROD), GUARDIAN_HOOK(Category.FISHING_ROD), OCEAN_BLESSING(Category.FISHING_ROD), RIVER_SPIRIT(Category.FISHING_ROD), SUNKEN_RELIC(Category.FISHING_ROD),
+    STORM_ANGLER(Category.FISHING_ROD), MERMAID_TEARS(Category.FISHING_ROD), ABYSSAL_HOOK(Category.FISHING_ROD), LEVIATHAN_LINE(Category.FISHING_ROD), VELIORA_SECRET(Category.FISHING_ROD);
 
-    enum Category { WEAPON, TOOL, ARMOR, BOW, SHIELD, MACE }
+    enum Category { WEAPON, TOOL, ARMOR, BOW, SHIELD, MACE, FISHING_ROD }
     private final Category category;
     LegacyEnchant(Category category) { this.category = category; }
     String id() { return name().toLowerCase(Locale.ROOT); }
@@ -36,5 +39,6 @@ enum LegacyEnchant {
         case BOW -> material == Material.BOW || material == Material.CROSSBOW;
         case SHIELD -> material == Material.SHIELD;
         case MACE -> material == Material.MACE;
+        case FISHING_ROD -> material == Material.FISHING_ROD;
     }; }
 }
