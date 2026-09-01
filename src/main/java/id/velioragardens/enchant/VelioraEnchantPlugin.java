@@ -44,6 +44,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private final Set<Location> veinBreaking = ConcurrentHashMap.newKeySet();
     private final Map<String, Enchantment> overlevel = new LinkedHashMap<>();
     private boolean excellentEnchantsPresent;
+    private DistributionPolicy distributionPolicy;
     private static final Component FISHING_MENU_TITLE=Component.text("✦ Veliora Fishing Enchants",NamedTextColor.AQUA);
 
     @Override public void onEnable() {
@@ -58,6 +59,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         }
         getConfig().options().copyDefaults(true);
         saveConfig();
+        distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution"));
         customKey = new NamespacedKey(this, "custom_enchant");
         overlevel.put("sharpness", Enchantment.SHARPNESS);
         overlevel.put("impaling", Enchantment.IMPALING);
@@ -416,7 +418,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1 && args[0].equalsIgnoreCase("menu") && sender instanceof Player player) { openFishingMenu(player); return true; }
-        if (args.length == 1 && args[0].equalsIgnoreCase("reload")) { reloadConfig(); sender.sendMessage(Component.text("VelioraEnchant reloaded.",NamedTextColor.GREEN)); return true; }
+        if (args.length == 1 && args[0].equalsIgnoreCase("reload")) { reloadConfig(); distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution")); sender.sendMessage(Component.text("VelioraEnchant reloaded.",NamedTextColor.GREEN)); return true; }
         if (args.length == 2 && (args[0].equalsIgnoreCase("rodroll") || args[0].equalsIgnoreCase("fishroll"))) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} target.getInventory().addItem(rollFishingBook()).values().forEach(item->target.getWorld().dropItemNaturally(target.getLocation(),item)); sender.sendMessage(Component.text("Fishing rod enchant book di-roll.",NamedTextColor.GREEN)); return true; }
         if (args.length == 4 && args[0].equalsIgnoreCase("give")) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} int level; try{level=Integer.parseInt(args[3]);}catch(NumberFormatException e){return false;} String id=args[2].toLowerCase(Locale.ROOT); if(LegacyEnchant.find(id).isEmpty()){sender.sendMessage(Component.text("Enchant tidak dikenal.",NamedTextColor.RED));return true;} level=Math.clamp(level,1,getConfig().getInt("custom-enchants."+id+".max-level",3)); target.getInventory().addItem(createBook(id,level)).values().forEach(i->target.getWorld().dropItemNaturally(target.getLocation(),i)); sender.sendMessage(Component.text("Book diberikan.",NamedTextColor.GREEN));return true; }
         sender.sendMessage(Component.text("/venchant give <player> <enchant> <level> | /venchant reload",NamedTextColor.YELLOW)); return true;
