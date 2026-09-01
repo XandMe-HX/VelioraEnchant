@@ -23,6 +23,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,6 +38,13 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        for (LegacyEnchant enchant : LegacyEnchant.values()) {
+            String path = "custom-enchants." + enchant.id();
+            getConfig().addDefault(path + ".enabled", true);
+            getConfig().addDefault(path + ".max-level", 3);
+        }
+        getConfig().options().copyDefaults(true);
+        saveConfig();
         customKey = new NamespacedKey(this, "custom_enchant");
         overlevel.put("sharpness", Enchantment.SHARPNESS);
         overlevel.put("impaling", Enchantment.IMPALING);
@@ -48,6 +57,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         getServer().getPluginManager().registerEvents(this, this);
         Objects.requireNonNull(getCommand("velioraenchant")).setExecutor(this);
         Objects.requireNonNull(getCommand("velioraenchant")).setTabCompleter(this);
+        getServer().getScheduler().runTaskTimer(this, this::applyPassiveEffects, 20L, 20L);
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -84,6 +94,22 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + heal));
             player.getWorld().spawnParticle(Particle.HEART, target.getLocation().add(0, 1, 0), 2, .25, .3, .25, 0);
         }
+        int bleed = customLevel(weapon, "bleed");
+        if (bleed > 0 && ready(player, "bleed", 30)) target.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 20 * (1 + bleed), 0, true, false, true));
+        int poison = customLevel(weapon, "poison");
+        if (poison > 0 && ready(player, "poison", 30)) target.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 20 * (1 + poison), 0, true, false, true));
+        int blind = Math.max(customLevel(weapon, "blind"), customLevel(weapon, "debuff"));
+        if (blind > 0 && ready(player, "blind", 40)) target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 20 * (1 + blind), 0, true, false, true));
+        int burning = customLevel(weapon, "burning");
+        if (burning > 0) target.setFireTicks(Math.max(target.getFireTicks(), 20 * (1 + burning)));
+        int critical = customLevel(weapon, "critical");
+        if (critical > 0 && Math.random() < Math.min(.45, critical * .08)) { event.setDamage(event.getDamage() * (1 + critical * .12)); player.getWorld().spawnParticle(Particle.CRIT, target.getLocation().add(0,1,0), 12,.3,.4,.3,0); }
+        int lightning = customLevel(weapon, "lightning");
+        if (lightning > 0 && ready(player, "lightning", 80)) target.getWorld().strikeLightningEffect(target.getLocation());
+        int freeze = customLevel(weapon, "freeze");
+        if (freeze > 0 && ready(player, "freeze", 50)) target.setFreezeTicks(Math.min(140, target.getFreezeTicks() + freeze * 30));
+        int knockback = Math.max(customLevel(weapon, "wind_strike"), customLevel(weapon, "sudden_blow"));
+        if (knockback > 0 && ready(player, "wind_strike", 35)) target.setVelocity(target.getLocation().toVector().subtract(player.getLocation().toVector()).normalize().multiply(.25 + knockback * .12).setY(.18));
         int wind = customLevel(weapon, "wind_burst");
         if (wind > 0 && enabled("wind_burst") && weapon.getType() == Material.MACE && ready(player, "wind_burst", getConfig().getLong("custom-enchants.wind_burst.cooldown-ticks", 220))) {
             windUntil.put(player.getUniqueId(), tick() + getConfig().getLong("custom-enchants.wind_burst.duration-ticks", 80));
@@ -103,6 +129,24 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     }
 
     @EventHandler(ignoreCancelled = true)
+    public void onLethalDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player) || event.getFinalDamage() < player.getHealth()) return;
+        if (has(player, "phoenix") || has(player, "second_life") || has(player, "death_angel")) {
+            String id = has(player, "phoenix") ? "phoenix" : has(player, "second_life") ? "second_life" : "death_angel";
+            if (ready(player, id, 20L * 180)) { event.setCancelled(true); player.setHealth(Math.min(player.getMaxHealth(), 4 + highest(player, id))); player.setFireTicks(0); player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 100, 1, true, true, true)); player.getWorld().spawnParticle(Particle.TOTEM_OF_UNDYING, player.getLocation().add(0,1,0), 30,.35,.7,.35,.05); }
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onProjectileHit(EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Projectile projectile) || !(projectile.getShooter() instanceof Player player) || !(event.getEntity() instanceof LivingEntity target)) return;
+        ItemStack bow = player.getInventory().getItemInMainHand().getType() == Material.BOW || player.getInventory().getItemInMainHand().getType() == Material.CROSSBOW ? player.getInventory().getItemInMainHand() : player.getInventory().getItemInOffHand();
+        int blind = customLevel(bow, "blinding_arrow"); if (blind > 0 && ready(player,"blinding_arrow",35)) target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 20 * blind, 0));
+        int frost = customLevel(bow, "frost_arrow"); if (frost > 0 && ready(player,"frost_arrow",35)) target.setFreezeTicks(Math.min(140, target.getFreezeTicks() + frost * 30));
+        int focus = customLevel(bow, "focus_fire"); if (focus > 0) event.setDamage(event.getDamage() * (1 + focus * .08));
+    }
+
+    @EventHandler(ignoreCancelled = true)
     public void onShield(EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof Player defender) || !defender.isBlocking()) return;
         ItemStack shield = defender.getInventory().getItemInOffHand();
@@ -116,13 +160,15 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     @EventHandler(ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
         Player player = event.getPlayer(); ItemStack tool = player.getInventory().getItemInMainHand(); Block origin = event.getBlock();
-        if (customLevel(tool, "autosmelt") > 0 && enabled("autosmelt")) autosmelt(event, player, origin);
-        if (customLevel(tool, "telepathy") > 0 && enabled("telepathy")) telepathy(event, player, origin);
+        boolean smelted = customLevel(tool, "autosmelt") > 0 && enabled("autosmelt") && autosmelt(event, player, origin);
+        if (!smelted && customLevel(tool, "telepathy") > 0 && enabled("telepathy")) telepathy(event, player, origin);
         int vein = customLevel(tool, "vein");
         if (vein > 0 && enabled("vein") && !veinBreaking.remove(origin.getLocation())) mineVein(player, origin, tool, vein);
+        int trees = customLevel(tool, "deforestation");
+        if (trees > 0 && enabled("deforestation") && origin.getType().name().endsWith("_LOG") && !veinBreaking.remove(origin.getLocation())) mineVein(player, origin, tool, trees);
     }
 
-    private void autosmelt(BlockBreakEvent event, Player player, Block block) {
+    private boolean autosmelt(BlockBreakEvent event, Player player, Block block) {
         ItemStack drop = new ItemStack(block.getType());
         Material result = switch (block.getType()) {
             case IRON_ORE, DEEPSLATE_IRON_ORE -> Material.IRON_INGOT;
@@ -130,8 +176,9 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             case COPPER_ORE, DEEPSLATE_COPPER_ORE -> Material.COPPER_INGOT;
             default -> null;
         };
-        if (result == null) return;
+        if (result == null) return false;
         event.setDropItems(false); player.getInventory().addItem(new ItemStack(result)).values().forEach(i -> player.getWorld().dropItemNaturally(block.getLocation(), i));
+        return true;
     }
 
     private void telepathy(BlockBreakEvent event, Player player, Block block) {
@@ -151,6 +198,29 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         }
     }
 
+    private void applyPassiveEffects() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            applyPassive(player, "speed", PotionEffectType.SPEED, 30, 0);
+            applyPassive(player, "jump", PotionEffectType.JUMP_BOOST, 30, 0);
+            applyPassive(player, "regeneration", PotionEffectType.REGENERATION, 30, 0);
+            applyPassive(player, "night_vision", PotionEffectType.NIGHT_VISION, 30, 0);
+            applyPassive(player, "water_breathing", PotionEffectType.WATER_BREATHING, 30, 0);
+            applyPassive(player, "dolphins_grace", PotionEffectType.DOLPHINS_GRACE, 30, 0);
+            applyPassive(player, "haste_aura", PotionEffectType.HASTE, 30, 0);
+            applyPassive(player, "slow_fall", PotionEffectType.SLOW_FALLING, 30, 0);
+            applyPassive(player, "tank", PotionEffectType.RESISTANCE, 30, 0);
+            applyPassive(player, "fire_boots", PotionEffectType.FIRE_RESISTANCE, 30, 0);
+            applyPassive(player, "molten", PotionEffectType.FIRE_RESISTANCE, 30, 0);
+            applyPassive(player, "saturation", PotionEffectType.SATURATION, 1, 0);
+            applyPassive(player, "barrier", PotionEffectType.ABSORPTION, 30, 0);
+            if (has(player, "auto_repair")) repairHeldItem(player, highest(player, "auto_repair"));
+        }
+    }
+    private void applyPassive(Player player, String id, PotionEffectType effect, int seconds, int baseAmplifier) { int level=highest(player,id); if(level>0 && enabled(id)) player.addPotionEffect(new PotionEffect(effect, seconds*20, baseAmplifier + Math.min(2, level-1), true, false, true)); }
+    private void repairHeldItem(Player player, int level) { ItemStack item=player.getInventory().getItemInMainHand(); if(item.getItemMeta() instanceof org.bukkit.inventory.meta.Damageable damage && damage.hasDamage()) { damage.setDamage(Math.max(0,damage.getDamage()-Math.max(1,level))); item.setItemMeta(damage); } }
+    private boolean has(Player player, String id) { return highest(player,id)>0; }
+    private int highest(Player player, String id) { int highest=customLevel(player.getInventory().getItemInMainHand(),id); highest=Math.max(highest,customLevel(player.getInventory().getItemInOffHand(),id)); for(ItemStack item:player.getInventory().getArmorContents()) highest=Math.max(highest,customLevel(item,id)); return highest; }
+
     private boolean enabled(String id) { return getConfig().getBoolean("custom-enchants." + id + ".enabled", true); }
     private int cap(String id, int fallback) { return Math.max(1, getConfig().getInt("overlevel.caps." + id, fallback)); }
     private long tick() { return getServer().getCurrentTick(); }
@@ -164,7 +234,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private boolean applyCustomBook(ItemStack left, ItemStack right, ItemStack result) {
         if (right.getType() != Material.ENCHANTED_BOOK || right.getItemMeta() == null) return false;
         String id = right.getItemMeta().getPersistentDataContainer().get(customKey, PersistentDataType.STRING);
-        if (id == null || !getConfig().contains("custom-enchants." + id) || !canApply(left.getType(), id)) return false;
+        if (id == null || LegacyEnchant.find(id).isEmpty() || !canApply(left.getType(), id)) return false;
         int incoming = customLevel(right, id); if (incoming < 1) return false;
         int merged = Math.min(getConfig().getInt("custom-enchants." + id + ".max-level", 1), Math.max(incoming, customLevel(left, id)));
         ItemMeta meta = result.getItemMeta(); if (meta == null) return false;
@@ -174,20 +244,14 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         lore.add(Component.text("✦ " + pretty(id) + " " + roman(merged), NamedTextColor.AQUA));
         meta.lore(lore); result.setItemMeta(meta); return true;
     }
-    private boolean canApply(Material material, String id) { return switch (id) {
-        case "lifesteal" -> material.name().endsWith("_SWORD") || material.name().endsWith("_AXE") || material == Material.MACE;
-        case "autosmelt", "telepathy", "vein" -> material.name().endsWith("_PICKAXE") || material.name().endsWith("_AXE") || material.name().endsWith("_SHOVEL");
-        case "shield_resistance" -> material == Material.SHIELD;
-        case "wind_burst" -> material == Material.MACE;
-        default -> false;
-    }; }
+    private boolean canApply(Material material, String id) { return LegacyEnchant.find(id).map(type -> type.accepts(material)).orElse(false); }
     private String pretty(String id) { return Arrays.stream(id.split("_")).map(s -> Character.toUpperCase(s.charAt(0))+s.substring(1)).reduce((a,b)->a+" "+b).orElse(id); }
     private String roman(int value) { String[] r={"","I","II","III","IV","V","VI","VII","VIII","IX","X"}; return value>0&&value<r.length?r[value]:String.valueOf(value); }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1 && args[0].equalsIgnoreCase("reload")) { reloadConfig(); sender.sendMessage(Component.text("VelioraEnchant reloaded.",NamedTextColor.GREEN)); return true; }
-        if (args.length == 4 && args[0].equalsIgnoreCase("give")) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} int level; try{level=Integer.parseInt(args[3]);}catch(NumberFormatException e){return false;} String id=args[2].toLowerCase(Locale.ROOT); if(!getConfig().contains("custom-enchants."+id)){sender.sendMessage(Component.text("Enchant tidak dikenal.",NamedTextColor.RED));return true;} level=Math.clamp(level,1,getConfig().getInt("custom-enchants."+id+".max-level",1)); target.getInventory().addItem(createBook(id,level)).values().forEach(i->target.getWorld().dropItemNaturally(target.getLocation(),i)); sender.sendMessage(Component.text("Book diberikan.",NamedTextColor.GREEN));return true; }
-        sender.sendMessage(Component.text("/venchant give <player> <lifesteal|autosmelt|telepathy|vein|shield_resistance|wind_burst> <level> | /venchant reload",NamedTextColor.YELLOW)); return true;
+        if (args.length == 4 && args[0].equalsIgnoreCase("give")) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} int level; try{level=Integer.parseInt(args[3]);}catch(NumberFormatException e){return false;} String id=args[2].toLowerCase(Locale.ROOT); if(LegacyEnchant.find(id).isEmpty()){sender.sendMessage(Component.text("Enchant tidak dikenal.",NamedTextColor.RED));return true;} level=Math.clamp(level,1,getConfig().getInt("custom-enchants."+id+".max-level",3)); target.getInventory().addItem(createBook(id,level)).values().forEach(i->target.getWorld().dropItemNaturally(target.getLocation(),i)); sender.sendMessage(Component.text("Book diberikan.",NamedTextColor.GREEN));return true; }
+        sender.sendMessage(Component.text("/venchant give <player> <enchant> <level> | /venchant reload",NamedTextColor.YELLOW)); return true;
     }
-    @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) { if(args.length==1)return List.of("give","reload"); if(args.length==2&&args[0].equalsIgnoreCase("give"))return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(); if(args.length==3)return List.of("lifesteal","autosmelt","telepathy","vein","shield_resistance","wind_burst"); return List.of(); }
+    @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) { if(args.length==1)return List.of("give","reload"); if(args.length==2&&args[0].equalsIgnoreCase("give"))return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(); if(args.length==3)return LegacyEnchant.ids(); return List.of(); }
 }
