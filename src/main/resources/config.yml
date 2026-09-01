@@ -24,6 +24,15 @@ excellent-vampire:
   max-level: 3
   heal-per-level: 2.0 # 2 health = 1 heart per level
   cooldown-ticks: 60 # 3 seconds
+
+fishing:
+  enabled: true
+  # Formula: ADD = Base + Per_Level × (level - 1); MULTIPLY = Base × Per_Level^(level - 1).
+  modifiers:
+    catch-xp: { Base: 2.0, Per_Level: 1.0, Capacity: 8.0, Action: ADD }
+    double-catch-chance: { Base: 0.08, Per_Level: 0.04, Capacity: 0.20, Action: ADD }
+    treasure-chance: { Base: 0.03, Per_Level: 0.02, Capacity: 0.10, Action: ADD }
+    heal: { Base: 2.0, Per_Level: 1.0, Capacity: 6.0, Action: ADD }
 custom-enchants:
   # Other catalogue entries are added automatically with their balanced max level on first startup.
   lifesteal: { enabled: true, max-level: 5, heal-per-level: 0.35, cooldown-ticks: 20 }

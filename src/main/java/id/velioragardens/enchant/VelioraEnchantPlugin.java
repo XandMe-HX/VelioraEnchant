@@ -46,6 +46,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     @Override public void onEnable() {
         saveDefaultConfig();
         excellentEnchantsPresent = getServer().getPluginManager().isPluginEnabled("ExcellentEnchants");
+        boolean suitePresent = getServer().getPluginManager().isPluginEnabled("VelioraSuite");
         for (LegacyEnchant enchant : LegacyEnchant.values()) {
             String path = "custom-enchants." + enchant.id();
             getConfig().addDefault(path + ".enabled", true);
@@ -68,6 +69,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         Objects.requireNonNull(getCommand("velioraenchant")).setTabCompleter(this);
         getServer().getScheduler().runTaskTimer(this, this::applyPassiveEffects, 200L, 200L);
         if (excellentEnchantsPresent && getConfig().getBoolean("excellent-enchants-bridge.enabled", true)) getLogger().info("ExcellentEnchants detected: duplicate Veliora effects will be suppressed per item.");
+        getLogger().info("Fishing rod enchant engine enabled" + (suitePresent ? " with optional VelioraSuite hook available." : " without VelioraSuite dependency."));
     }
     @Override public void onDisable() { cooldowns.clear(); windUntil.clear(); repairReady.clear(); veinBreaking.clear(); }
 
@@ -296,7 +298,9 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private int defaultMaxLevel(LegacyEnchant enchant) {
         return switch (enchant) {
             case AUTO_SMELT, TELEPATHY, AUTO_FARM, PHOENIX, SECOND_LIFE, DEATH_ANGEL -> 1;
+            case ABYSSAL_HOOK, LEVIATHAN_LINE, VELIORA_SECRET -> 1;
             case LIFE_STEAL, SHIELD_RESISTANCE -> 5;
+            case SUNKEN_RELIC, STORM_ANGLER, MERMAID_TEARS -> 2;
             default -> 3;
         };
     }
