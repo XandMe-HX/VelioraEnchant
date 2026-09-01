@@ -18,6 +18,8 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.block.data.Ageable;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -209,6 +211,11 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         int trees = customLevel(tool, "deforestation");
         if (trees > 0 && enabled("deforestation") && origin.getType().name().endsWith("_LOG") && !veinBreaking.remove(origin.getLocation())) mineVein(player, origin, tool, trees);
         if (customLevel(tool,"flower") > 0 && origin.getType() == Material.GRASS_BLOCK && ready(player,"flower",30)) origin.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, origin.getLocation().add(.5,1,.5), 8,.4,.2,.4,0);
+        int chunk = customLevel(tool,"chunk");
+        if (chunk > 0 && enabled("chunk") && !veinBreaking.remove(origin.getLocation())) mineChunk(player, origin, tool, chunk);
+        if (customLevel(tool,"auto_farm") > 0 && origin.getBlockData() instanceof Ageable crop && crop.getAge() >= crop.getMaximumAge()) replantCrop(origin);
+        int treasure=customLevel(tool,"lucky_treasure"); if(treasure>0 && ready(player,"lucky_treasure",25) && Math.random()<Math.min(.20, treasure*.035)) { player.giveExp(treasure*3); player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER,origin.getLocation().add(.5,.5,.5),10,.25,.25,.25,0); }
+        int experience=Math.max(customLevel(tool,"experience"),customLevel(tool,"levels")); if(experience>0) event.setExpToDrop((int)Math.ceil(event.getExpToDrop()*(1+experience*.15)));
     }
 
     private boolean autosmelt(BlockBreakEvent event, Player player, Block block) {
@@ -240,6 +247,11 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             veinBreaking.add(block.getLocation()); block.breakNaturally(tool, true); broken++;
         }
     }
+    private void mineChunk(Player player, Block origin, ItemStack tool, int level) { int radius=Math.min(1,level); int remaining=8; for(int x=-radius;x<=radius&&remaining>0;x++) for(int z=-radius;z<=radius&&remaining>0;z++) { if(x==0&&z==0)continue; Block block=origin.getRelative(x,0,z); if(block.getType().isAir() || !block.getType().isBlock())continue; veinBreaking.add(block.getLocation()); block.breakNaturally(tool,true); remaining--; } }
+    private void replantCrop(Block block) { Material type=block.getType(); getServer().getScheduler().runTaskLater(this,()->{ if(block.getType().isAir()) block.setType(type); },1L); }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onConsume(PlayerItemConsumeEvent event) { Player player=event.getPlayer(); int pocket=highest(player,"food_pocket"); if(pocket>0) { player.setFoodLevel(Math.min(20,player.getFoodLevel()+pocket)); player.setSaturation(Math.min(20f,player.getSaturation()+pocket*.5f)); } }
 
     private void applyPassiveEffects() {
         for (Player player : Bukkit.getOnlinePlayers()) {
