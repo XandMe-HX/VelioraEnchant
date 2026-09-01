@@ -13,6 +13,7 @@ overlevel:
     thorns: 8
     density: 8
 custom-enchants:
+  # Other catalogue entries are added automatically with their balanced max level on first startup.
   lifesteal: { enabled: true, max-level: 5, heal-per-level: 0.35, cooldown-ticks: 20 }
   autosmelt: { enabled: true, max-level: 1 }
   telepathy: { enabled: true, max-level: 1 }

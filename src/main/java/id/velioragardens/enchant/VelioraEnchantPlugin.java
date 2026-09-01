@@ -47,7 +47,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         for (LegacyEnchant enchant : LegacyEnchant.values()) {
             String path = "custom-enchants." + enchant.id();
             getConfig().addDefault(path + ".enabled", true);
-            getConfig().addDefault(path + ".max-level", 3);
+            getConfig().addDefault(path + ".max-level", defaultMaxLevel(enchant));
             getConfig().addDefault(path + ".cooldown-ticks", -1);
         }
         getConfig().options().copyDefaults(true);
@@ -288,6 +288,13 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private int highest(Player player, String id) { int highest=customLevel(player.getInventory().getItemInMainHand(),id); highest=Math.max(highest,customLevel(player.getInventory().getItemInOffHand(),id)); for(ItemStack item:player.getInventory().getArmorContents()) highest=Math.max(highest,customLevel(item,id)); return highest; }
 
     private boolean enabled(String id) { return getConfig().getBoolean("custom-enchants." + id + ".enabled", true); }
+    private int defaultMaxLevel(LegacyEnchant enchant) {
+        return switch (enchant) {
+            case AUTO_SMELT, TELEPATHY, AUTO_FARM, PHOENIX, SECOND_LIFE, DEATH_ANGEL -> 1;
+            case LIFE_STEAL, SHIELD_RESISTANCE -> 5;
+            default -> 3;
+        };
+    }
     private int cap(String id, int fallback) { return Math.max(1, getConfig().getInt("overlevel.caps." + id, fallback)); }
     private long tick() { return getServer().getCurrentTick(); }
     private boolean ready(Player player, String id, long fallbackTicks) { long configured=getConfig().getLong("custom-enchants."+id+".cooldown-ticks", -1); long ticks=configured>=0?configured:fallbackTicks; long now=tick(), until=cooldowns.getOrDefault(player.getUniqueId(), 0L); if(until>now) return false; cooldowns.put(player.getUniqueId(), now+Math.max(0,ticks)); return true; }
