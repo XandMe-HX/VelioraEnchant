@@ -22,6 +22,7 @@ import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerFishEvent;
+import org.bukkit.event.world.LootGenerateEvent;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
@@ -292,6 +293,17 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         if(customLevel(rod,"mermaid_tears")>0&&ready(player,"mermaid_tears",80)) player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION,60,0));
         if(customLevel(rod,"veliora_secret")>0&&Math.random()<getConfig().getDouble("fishing.secret-catch-chance",.0005)) giveFragment(player,"Veliora Secret Fragment",NamedTextColor.DARK_PURPLE);
     }
+    @EventHandler(ignoreCancelled = true)
+    public void onStructureLoot(LootGenerateEvent event) {
+        if (!distributionPolicy.enabled(DistributionPolicy.Source.STRUCTURE_LOOT)) return;
+        String table=event.getLootTable().getKey().toString();
+        if (!distributionPolicy.lootTables().contains(table) || Math.random() >= distributionPolicy.chance(DistributionPolicy.Source.STRUCTURE_LOOT)) return;
+        boolean alreadyInjected=event.getLoot().stream().anyMatch(item -> item.getItemMeta()!=null && item.getItemMeta().getPersistentDataContainer().has(new NamespacedKey(this,"distribution_book"),PersistentDataType.BYTE));
+        if (alreadyInjected) return;
+        ItemStack book=rollFishingBook(distributionPolicy.cap(DistributionPolicy.Source.STRUCTURE_LOOT));
+        ItemMeta meta=book.getItemMeta(); meta.getPersistentDataContainer().set(new NamespacedKey(this,"distribution_book"),PersistentDataType.BYTE,(byte)1); book.setItemMeta(meta);
+        event.getLoot().add(book);
+    }
 
     private void applyPassiveEffects() {
         for (Player player : Bukkit.getOnlinePlayers()) {
@@ -326,8 +338,10 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private LevelModifier modifier(String key,double base,double perLevel,double capacity) { return LevelModifier.from(getConfig().getConfigurationSection("fishing.modifiers."+key),base,perLevel,capacity,LevelModifier.Action.ADD); }
     private boolean isBiome(Player player,String token) { return player.getLocation().getBlock().getBiome().getKey().getKey().toUpperCase(Locale.ROOT).contains(token); }
     private void giveFragment(Player player,String name,NamedTextColor color) { ItemStack fragment=new ItemStack(Material.PRISMARINE_SHARD); ItemMeta meta=fragment.getItemMeta(); meta.displayName(Component.text(name,color)); meta.lore(List.of(Component.text("Koleksi rahasia Veliora",NamedTextColor.DARK_GRAY))); fragment.setItemMeta(meta); player.getInventory().addItem(fragment).values().forEach(left->player.getWorld().dropItemNaturally(player.getLocation(),left)); player.getWorld().spawnParticle(Particle.ENCHANT,player.getLocation().add(0,1,0),24,.35,.5,.35,.05); player.playSound(player.getLocation(),Sound.UI_TOAST_CHALLENGE_COMPLETE,.5f,1.3f); }
-    private FishingRarity rollFishingRarity() { double roll=Math.random()*100, total=0; for(FishingRarity rarity:FishingRarity.values()){total+=getConfig().getDouble("fishing.rarity."+rarity.id, switch(rarity){case COMMON->55;case RARE->28;case EPIC->12;case LEGENDARY->4.5;case MYTHIC->.45;case SECRET->.05;});if(roll<total)return rarity;} return FishingRarity.COMMON; }
-    private ItemStack rollFishingBook() { FishingRarity rarity=rollFishingRarity(); String id=rarity.enchantments.get(getRandom().nextInt(rarity.enchantments.size())); int level=rarity==FishingRarity.COMMON||rarity==FishingRarity.RARE||rarity==FishingRarity.EPIC?1+getRandom().nextInt(Math.min(3,defaultMaxLevel(LegacyEnchant.find(id).orElseThrow()))):1; ItemStack book=createBook(id,level); ItemMeta meta=book.getItemMeta(); meta.displayName(Component.text("["+rarity.id.toUpperCase(Locale.ROOT)+"] "+pretty(id)+" "+roman(level),rarity.color)); book.setItemMeta(meta); return book; }
+    private FishingRarity rollFishingRarity() { return rollFishingRarity(FishingRarity.SECRET); }
+    private FishingRarity rollFishingRarity(FishingRarity cap) { double total=0; for(FishingRarity rarity:FishingRarity.values()){if(rarity.ordinal()>cap.ordinal())break;total+=getConfig().getDouble("fishing.rarity."+rarity.id, switch(rarity){case COMMON->55;case RARE->28;case EPIC->12;case LEGENDARY->4.5;case MYTHIC->.45;case SECRET->.05;});} double roll=Math.random()*total, current=0; for(FishingRarity rarity:FishingRarity.values()){if(rarity.ordinal()>cap.ordinal())break;current+=getConfig().getDouble("fishing.rarity."+rarity.id,0);if(roll<current)return rarity;} return FishingRarity.COMMON; }
+    private ItemStack rollFishingBook() { return rollFishingBook(FishingRarity.SECRET); }
+    private ItemStack rollFishingBook(FishingRarity cap) { FishingRarity rarity=rollFishingRarity(cap); String id=rarity.enchantments.get(getRandom().nextInt(rarity.enchantments.size())); int level=rarity==FishingRarity.COMMON||rarity==FishingRarity.RARE||rarity==FishingRarity.EPIC?1+getRandom().nextInt(Math.min(3,defaultMaxLevel(LegacyEnchant.find(id).orElseThrow()))):1; ItemStack book=createBook(id,level); ItemMeta meta=book.getItemMeta(); meta.displayName(Component.text("["+rarity.id.toUpperCase(Locale.ROOT)+"] "+pretty(id)+" "+roman(level),rarity.color)); book.setItemMeta(meta); return book; }
     private void openFishingMenu(Player player) {
         Inventory inventory=Bukkit.createInventory(new FishingMenuHolder(),54,FISHING_MENU_TITLE);
         ItemStack border=new ItemStack(Material.GRAY_STAINED_GLASS_PANE); ItemMeta borderMeta=border.getItemMeta(); borderMeta.displayName(Component.empty()); border.setItemMeta(borderMeta);
