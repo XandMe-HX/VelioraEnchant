@@ -12,11 +12,15 @@ overlevel:
     projectile_protection: 10
     thorns: 8
     density: 8
+
+# Optional: only has an effect when ExcellentEnchants is installed.
+# If matching Excellent enchant is on the same item, Veliora's duplicate effect is not applied.
+excellent-enchants-bridge:
+  enabled: true
 custom-enchants:
   # Other catalogue entries are added automatically with their balanced max level on first startup.
   lifesteal: { enabled: true, max-level: 5, heal-per-level: 0.35, cooldown-ticks: 20 }
   autosmelt: { enabled: true, max-level: 1 }
   telepathy: { enabled: true, max-level: 1 }
-  vein: { enabled: true, max-level: 3, max-blocks-per-level: 12 }
   shield_resistance: { enabled: true, max-level: 5, reduction-per-level: 0.10 }
   wind_burst: { enabled: true, max-level: 3, fall-reduction-per-level: 0.10, duration-ticks: 80, cooldown-ticks: 220 }

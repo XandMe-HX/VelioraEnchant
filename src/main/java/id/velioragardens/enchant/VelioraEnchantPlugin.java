@@ -41,9 +41,11 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private final Map<UUID, Long> repairReady = new ConcurrentHashMap<>();
     private final Set<Location> veinBreaking = ConcurrentHashMap.newKeySet();
     private final Map<String, Enchantment> overlevel = new LinkedHashMap<>();
+    private boolean excellentEnchantsPresent;
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        excellentEnchantsPresent = getServer().getPluginManager().isPluginEnabled("ExcellentEnchants");
         for (LegacyEnchant enchant : LegacyEnchant.values()) {
             String path = "custom-enchants." + enchant.id();
             getConfig().addDefault(path + ".enabled", true);
@@ -65,6 +67,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         Objects.requireNonNull(getCommand("velioraenchant")).setExecutor(this);
         Objects.requireNonNull(getCommand("velioraenchant")).setTabCompleter(this);
         getServer().getScheduler().runTaskTimer(this, this::applyPassiveEffects, 200L, 200L);
+        if (excellentEnchantsPresent && getConfig().getBoolean("excellent-enchants-bridge.enabled", true)) getLogger().info("ExcellentEnchants detected: duplicate Veliora effects will be suppressed per item.");
     }
     @Override public void onDisable() { cooldowns.clear(); windUntil.clear(); repairReady.clear(); veinBreaking.clear(); }
 
@@ -300,7 +303,28 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private boolean ready(Player player, String id, long fallbackTicks) { long configured=getConfig().getLong("custom-enchants."+id+".cooldown-ticks", -1); long ticks=configured>=0?configured:fallbackTicks; long now=tick(), until=cooldowns.getOrDefault(player.getUniqueId(), 0L); if(until>now) return false; cooldowns.put(player.getUniqueId(), now+Math.max(0,ticks)); return true; }
     private int enchantLevel(ItemStack item, Enchantment enchant) { if(item.getType()==Material.ENCHANTED_BOOK && item.getItemMeta() instanceof EnchantmentStorageMeta meta) return meta.getStoredEnchantLevel(enchant); return item.getEnchantmentLevel(enchant); }
     private void setEnchant(ItemStack item, Enchantment enchant, int level) { ItemMeta meta=item.getItemMeta(); if(meta instanceof EnchantmentStorageMeta book) { book.addStoredEnchant(enchant, level, true); item.setItemMeta(book); } else item.addUnsafeEnchantment(enchant, level); }
-    private int customLevel(ItemStack item, String id) { if(item == null || item.getType().isAir() || item.getItemMeta()==null) return 0; return item.getItemMeta().getPersistentDataContainer().getOrDefault(customKey(id), PersistentDataType.INTEGER, 0); }
+    private int customLevel(ItemStack item, String id) {
+        if(item == null || item.getType().isAir() || item.getItemMeta()==null) return 0;
+        int level=item.getItemMeta().getPersistentDataContainer().getOrDefault(customKey(id), PersistentDataType.INTEGER, 0);
+        return level > 0 && !hasExcellentEquivalent(item,id) ? level : 0;
+    }
+    private boolean hasExcellentEquivalent(ItemStack item, String velioraId) {
+        if (!excellentEnchantsPresent || !getConfig().getBoolean("excellent-enchants-bridge.enabled", true)) return false;
+        Set<String> equivalents = switch (velioraId) {
+            case "speed" -> Set.of("speedy", "nimble");
+            case "haste_aura" -> Set.of("haste");
+            case "night_vision" -> Set.of("nightvision");
+            case "saturation" -> Set.of("saturation");
+            case "water_breathing" -> Set.of("waterbreathing");
+            case "fire_boots", "molten" -> Set.of("fireshield", "flamewalker");
+            case "protection", "guarded", "obsidian_plate", "ductile", "sturdy" -> Set.of("hardened", "elementalprotection");
+            case "poisonous_thorns" -> Set.of("rebound");
+            case "auto_farm" -> Set.of("replanter");
+            default -> Set.of();
+        };
+        if (equivalents.isEmpty()) return false;
+        return item.getEnchantments().keySet().stream().anyMatch(enchant -> equivalents.contains(enchant.getKey().getKey().replace("_", "").toLowerCase(Locale.ROOT)));
+    }
     private ItemStack createBook(String id, int level) { ItemStack book=new ItemStack(Material.ENCHANTED_BOOK); ItemMeta meta=book.getItemMeta(); meta.getPersistentDataContainer().set(customKey, PersistentDataType.STRING, id); meta.getPersistentDataContainer().set(customKey(id),PersistentDataType.INTEGER,level); meta.displayName(Component.text(pretty(id)+" "+roman(level), NamedTextColor.AQUA)); meta.lore(List.of(Component.text("Gabungkan di anvil dengan item yang sesuai.",NamedTextColor.DARK_GRAY))); book.setItemMeta(meta); return book; }
     private NamespacedKey customKey(String id) { return new NamespacedKey(this, "ce_" + id); }
     private boolean isCustomBook(ItemStack item) { return item.getType() == Material.ENCHANTED_BOOK && item.getItemMeta() != null && item.getItemMeta().getPersistentDataContainer().has(customKey, PersistentDataType.STRING); }
