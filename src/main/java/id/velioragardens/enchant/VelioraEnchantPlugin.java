@@ -19,6 +19,7 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
@@ -46,6 +47,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             String path = "custom-enchants." + enchant.id();
             getConfig().addDefault(path + ".enabled", true);
             getConfig().addDefault(path + ".max-level", 3);
+            getConfig().addDefault(path + ".cooldown-ticks", -1);
         }
         getConfig().options().copyDefaults(true);
         saveConfig();
@@ -63,6 +65,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         Objects.requireNonNull(getCommand("velioraenchant")).setTabCompleter(this);
         getServer().getScheduler().runTaskTimer(this, this::applyPassiveEffects, 20L, 20L);
     }
+    @Override public void onDisable() { cooldowns.clear(); windUntil.clear(); veinBreaking.clear(); }
 
     @EventHandler(ignoreCancelled = true)
     public void onAnvil(PrepareAnvilEvent event) {
@@ -91,6 +94,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     @EventHandler(ignoreCancelled = true)
     public void onHit(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player player) || !(event.getEntity() instanceof LivingEntity target)) return;
+        if (player.equals(target) || player.getGameMode() == GameMode.SPECTATOR) return;
         ItemStack weapon = player.getInventory().getItemInMainHand();
         int lifesteal = customLevel(weapon, "lifesteal");
         if (lifesteal > 0 && enabled("lifesteal") && ready(player, "lifesteal", getConfig().getLong("custom-enchants.lifesteal.cooldown-ticks", 20))) {
@@ -200,6 +204,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         ItemStack item = event.getItem(); int unbreaking=Math.max(customLevel(item,"unbreaking"),customLevel(item,"ductile"));
         if (unbreaking > 0 && Math.random() < Math.min(.75, unbreaking * .12)) event.setCancelled(true);
     }
+    @EventHandler public void onQuit(PlayerQuitEvent event) { UUID id=event.getPlayer().getUniqueId(); cooldowns.remove(id); windUntil.remove(id); }
 
     @EventHandler(ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
@@ -291,7 +296,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private boolean enabled(String id) { return getConfig().getBoolean("custom-enchants." + id + ".enabled", true); }
     private int cap(String id, int fallback) { return Math.max(1, getConfig().getInt("overlevel.caps." + id, fallback)); }
     private long tick() { return getServer().getCurrentTick(); }
-    private boolean ready(Player player, String id, long ticks) { long now=tick(), until=cooldowns.getOrDefault(player.getUniqueId(), 0L); if(until>now) return false; cooldowns.put(player.getUniqueId(), now+ticks); return true; }
+    private boolean ready(Player player, String id, long fallbackTicks) { long configured=getConfig().getLong("custom-enchants."+id+".cooldown-ticks", -1); long ticks=configured>=0?configured:fallbackTicks; long now=tick(), until=cooldowns.getOrDefault(player.getUniqueId(), 0L); if(until>now) return false; cooldowns.put(player.getUniqueId(), now+Math.max(0,ticks)); return true; }
     private int enchantLevel(ItemStack item, Enchantment enchant) { if(item.getType()==Material.ENCHANTED_BOOK && item.getItemMeta() instanceof EnchantmentStorageMeta meta) return meta.getStoredEnchantLevel(enchant); return item.getEnchantmentLevel(enchant); }
     private void setEnchant(ItemStack item, Enchantment enchant, int level) { ItemMeta meta=item.getItemMeta(); if(meta instanceof EnchantmentStorageMeta book) { book.addStoredEnchant(enchant, level, true); item.setItemMeta(book); } else item.addUnsafeEnchantment(enchant, level); }
     private int customLevel(ItemStack item, String id) { if(item == null || item.getType().isAir() || item.getItemMeta()==null) return 0; return item.getItemMeta().getPersistentDataContainer().getOrDefault(customKey(id), PersistentDataType.INTEGER, 0); }
@@ -303,7 +308,9 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         String id = right.getItemMeta().getPersistentDataContainer().get(customKey, PersistentDataType.STRING);
         if (id == null || LegacyEnchant.find(id).isEmpty() || !canApply(left.getType(), id)) return false;
         int incoming = customLevel(right, id); if (incoming < 1) return false;
-        int merged = Math.min(getConfig().getInt("custom-enchants." + id + ".max-level", 1), Math.max(incoming, customLevel(left, id)));
+        int current=customLevel(left,id);
+        int merged = Math.min(getConfig().getInt("custom-enchants." + id + ".max-level", 3), incoming == current ? current + 1 : Math.max(incoming, current));
+        if (merged <= current) return false;
         ItemMeta meta = result.getItemMeta(); if (meta == null) return false;
         meta.getPersistentDataContainer().set(customKey(id), PersistentDataType.INTEGER, merged);
         List<Component> lore = new ArrayList<>(Optional.ofNullable(meta.lore()).orElse(List.of()));
