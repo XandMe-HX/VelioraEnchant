@@ -17,6 +17,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
+import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -28,6 +29,7 @@ import org.bukkit.potion.PotionEffectType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, TabExecutor {
     private NamespacedKey customKey;
@@ -110,6 +112,25 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         if (freeze > 0 && ready(player, "freeze", 50)) target.setFreezeTicks(Math.min(140, target.getFreezeTicks() + freeze * 30));
         int knockback = Math.max(customLevel(weapon, "wind_strike"), customLevel(weapon, "sudden_blow"));
         if (knockback > 0 && ready(player, "wind_strike", 35)) target.setVelocity(target.getLocation().toVector().subtract(player.getLocation().toVector()).normalize().multiply(.25 + knockback * .12).setY(.18));
+        int sharpen = Math.max(customLevel(weapon, "sharpen"), customLevel(weapon, "blast")); if (sharpen > 0) event.setDamage(event.getDamage() * (1 + sharpen * .06));
+        int omnivamp = Math.max(customLevel(weapon, "omnivamp"), customLevel(weapon, "soul_eater")); if (omnivamp > 0 && ready(player,"omnivamp",25)) player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + event.getFinalDamage() * .03 * omnivamp));
+        if (customLevel(weapon,"cobweb") > 0 && ready(player,"cobweb",60)) trapTarget(target);
+        if (customLevel(weapon,"storm") > 0 && ready(player,"storm",100)) { target.getWorld().strikeLightningEffect(target.getLocation()); target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 1)); }
+        if (customLevel(weapon,"nulled") > 0 && ready(player,"nulled",70)) target.getActivePotionEffects().forEach(effect -> target.removePotionEffect(effect.getType()));
+        int craving = customLevel(weapon, "craving");
+        if (craving > 0 && target instanceof Player victim && ready(player,"craving",50)) victim.setFoodLevel(Math.max(0, victim.getFoodLevel() - craving));
+        int emnity = customLevel(weapon, "emnity");
+        if (emnity > 0 && ready(player,"emnity",45)) target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 20 * (1 + emnity), Math.min(1, emnity - 1), true, false, true));
+        int grimoire = customLevel(weapon, "grimoire");
+        if (grimoire > 0 && ready(player,"grimoire",65)) castGrimoire(player, target, grimoire);
+        int hail = customLevel(weapon, "hail_storm");
+        if (hail > 0 && ready(player,"hail_storm",90)) castHail(target, hail);
+        int illusion = customLevel(weapon, "illusion");
+        if (illusion > 0 && ready(player,"illusion",80)) { player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, 20 * (1 + illusion), 0, true, false, true)); player.getWorld().spawnParticle(Particle.PORTAL, player.getLocation().add(0,1,0), 24,.4,.6,.4,.1); }
+        int implant = customLevel(weapon, "implant");
+        if (implant > 0 && ready(player,"implant",40)) player.giveExp(implant * 2);
+        int steal = customLevel(weapon, "steal");
+        if (steal > 0 && target instanceof Player victim && ready(player,"steal",60)) { int amount=Math.min(steal, victim.getFoodLevel()); victim.setFoodLevel(victim.getFoodLevel()-amount); player.setFoodLevel(Math.min(20,player.getFoodLevel()+amount)); }
         int wind = customLevel(weapon, "wind_burst");
         if (wind > 0 && enabled("wind_burst") && weapon.getType() == Material.MACE && ready(player, "wind_burst", getConfig().getLong("custom-enchants.wind_burst.cooldown-ticks", 220))) {
             windUntil.put(player.getUniqueId(), tick() + getConfig().getLong("custom-enchants.wind_burst.duration-ticks", 80));
@@ -158,6 +179,27 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     }
 
     @EventHandler(ignoreCancelled = true)
+    public void onArmorDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        double reduction = 0;
+        reduction += highest(player,"protection") * .025;
+        reduction += highest(player,"guarded") * .02;
+        reduction += highest(player,"obsidian_plate") * .025;
+        reduction += highest(player,"ductile") * .015;
+        reduction += highest(player,"sturdy") * .015;
+        if (player.getHealth() / player.getMaxHealth() < .35) reduction += highest(player,"emergency_defence") * .04;
+        if (reduction > 0) event.setDamage(event.getDamage() * Math.max(.35, 1 - Math.min(.55, reduction)));
+        int thorns = highest(player,"poisonous_thorns");
+        if (thorns > 0 && event instanceof EntityDamageByEntityEvent hit && hit.getDamager() instanceof LivingEntity attacker && ready(player,"poisonous_thorns",35)) attacker.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 20 * thorns, 0));
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onDurability(PlayerItemDamageEvent event) {
+        ItemStack item = event.getItem(); int unbreaking=Math.max(customLevel(item,"unbreaking"),customLevel(item,"ductile"));
+        if (unbreaking > 0 && Math.random() < Math.min(.75, unbreaking * .12)) event.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
         Player player = event.getPlayer(); ItemStack tool = player.getInventory().getItemInMainHand(); Block origin = event.getBlock();
         boolean smelted = customLevel(tool, "autosmelt") > 0 && enabled("autosmelt") && autosmelt(event, player, origin);
@@ -166,6 +208,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         if (vein > 0 && enabled("vein") && !veinBreaking.remove(origin.getLocation())) mineVein(player, origin, tool, vein);
         int trees = customLevel(tool, "deforestation");
         if (trees > 0 && enabled("deforestation") && origin.getType().name().endsWith("_LOG") && !veinBreaking.remove(origin.getLocation())) mineVein(player, origin, tool, trees);
+        if (customLevel(tool,"flower") > 0 && origin.getType() == Material.GRASS_BLOCK && ready(player,"flower",30)) origin.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, origin.getLocation().add(.5,1,.5), 8,.4,.2,.4,0);
     }
 
     private boolean autosmelt(BlockBreakEvent event, Player player, Block block) {
@@ -213,11 +256,23 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             applyPassive(player, "molten", PotionEffectType.FIRE_RESISTANCE, 30, 0);
             applyPassive(player, "saturation", PotionEffectType.SATURATION, 1, 0);
             applyPassive(player, "barrier", PotionEffectType.ABSORPTION, 30, 0);
+            applyPassive(player, "absorb", PotionEffectType.ABSORPTION, 30, 0);
+            applyPassive(player, "heal", PotionEffectType.REGENERATION, 30, 0);
+            applyPassive(player, "regain", PotionEffectType.REGENERATION, 30, 0);
+            applyPassive(player, "light_spirit", PotionEffectType.NIGHT_VISION, 30, 0);
+            applyPassive(player, "axolotl_buff", PotionEffectType.CONDUIT_POWER, 30, 0);
             if (has(player, "auto_repair")) repairHeldItem(player, highest(player, "auto_repair"));
+            if (has(player,"anti_stun")) { player.removePotionEffect(PotionEffectType.SLOWNESS); player.removePotionEffect(PotionEffectType.BLINDNESS); }
+            if (has(player,"miner_radar")) markNearbyOres(player, highest(player,"miner_radar"));
         }
     }
     private void applyPassive(Player player, String id, PotionEffectType effect, int seconds, int baseAmplifier) { int level=highest(player,id); if(level>0 && enabled(id)) player.addPotionEffect(new PotionEffect(effect, seconds*20, baseAmplifier + Math.min(2, level-1), true, false, true)); }
     private void repairHeldItem(Player player, int level) { ItemStack item=player.getInventory().getItemInMainHand(); if(item.getItemMeta() instanceof org.bukkit.inventory.meta.Damageable damage && damage.hasDamage()) { damage.setDamage(Math.max(0,damage.getDamage()-Math.max(1,level))); item.setItemMeta(damage); } }
+    private void trapTarget(LivingEntity target) { Location at=target.getLocation().getBlock().getLocation(); if(at.getBlock().getType().isAir()) { at.getBlock().setType(Material.COBWEB); getServer().getScheduler().runTaskLater(this,()->{if(at.getBlock().getType()==Material.COBWEB)at.getBlock().setType(Material.AIR);},60L); } }
+    private void castGrimoire(Player caster, LivingEntity target, int level) { switch (getRandom().nextInt(3)) { case 0 -> target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20 * (2 + level), 0)); case 1 -> target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 20 * (2 + level), 0)); default -> { caster.setHealth(Math.min(caster.getMaxHealth(), caster.getHealth() + level * .5)); target.setFireTicks(20 * level); } } caster.getWorld().spawnParticle(Particle.ENCHANT, target.getLocation().add(0,1,0), 18,.35,.5,.35,.1); }
+    private void castHail(LivingEntity target, int level) { Location at=target.getLocation().add(0,1,0); target.getWorld().spawnParticle(Particle.SNOWFLAKE, at, 35 + level * 10,.7,.9,.7,.04); target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20 * (2 + level), Math.min(2,level-1))); target.damage(Math.min(3, level * .75)); }
+    private Random getRandom() { return ThreadLocalRandom.current(); }
+    private void markNearbyOres(Player player, int level) { Location base=player.getLocation(); int radius=Math.min(10,3+level*2); int found=0; for(int x=-radius;x<=radius&&found<12;x++)for(int y=-3;y<=3&&found<12;y++)for(int z=-radius;z<=radius&&found<12;z++){ Block block=base.clone().add(x,y,z).getBlock(); if(block.getType().name().endsWith("_ORE")){player.spawnParticle(Particle.END_ROD,block.getLocation().add(.5,.5,.5),1,0,0,0,0);found++;}} }
     private boolean has(Player player, String id) { return highest(player,id)>0; }
     private int highest(Player player, String id) { int highest=customLevel(player.getInventory().getItemInMainHand(),id); highest=Math.max(highest,customLevel(player.getInventory().getItemInOffHand(),id)); for(ItemStack item:player.getInventory().getArmorContents()) highest=Math.max(highest,customLevel(item,id)); return highest; }
 

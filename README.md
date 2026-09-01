@@ -16,3 +16,5 @@ Requires Paper 1.21.8+ and Java 21. Configure every cap, cooldown, and multiplie
 `/venchant`, `/ce`, `/enchants`, `/customenchant`, `/customenchants`, `/overenchant`, `/enchantshop`, and `/es` use the same safe command handler.
 
 Use `/ce give <player> <enchant> <level>` to give a book, or `/ce reload` after editing the configuration.
+
+`vanish` is intentionally not available in VelioraEnchant because permanent invisibility is not balanced for the server.
