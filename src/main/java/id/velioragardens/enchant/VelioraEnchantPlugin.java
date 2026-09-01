@@ -17,6 +17,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -43,6 +44,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private final Set<Location> veinBreaking = ConcurrentHashMap.newKeySet();
     private final Map<String, Enchantment> overlevel = new LinkedHashMap<>();
     private boolean excellentEnchantsPresent;
+    private static final Component FISHING_MENU_TITLE=Component.text("✦ Veliora Fishing Enchants",NamedTextColor.AQUA);
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -192,6 +194,10 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         double chance = Math.min(.80, level * getConfig().getDouble("custom-enchants.shield_resistance.reduction-per-level", .10));
         if (Math.random() < chance) getServer().getScheduler().runTask(this, () -> defender.setCooldown(Material.SHIELD, 0));
     }
+    @EventHandler
+    public void onMenuClick(InventoryClickEvent event) {
+        if (event.getView().getTopInventory().getHolder() instanceof FishingMenuHolder) event.setCancelled(true);
+    }
 
     @EventHandler(ignoreCancelled = true)
     public void onArmorDamage(EntityDamageEvent event) {
@@ -320,6 +326,16 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private void giveFragment(Player player,String name,NamedTextColor color) { ItemStack fragment=new ItemStack(Material.PRISMARINE_SHARD); ItemMeta meta=fragment.getItemMeta(); meta.displayName(Component.text(name,color)); meta.lore(List.of(Component.text("Koleksi rahasia Veliora",NamedTextColor.DARK_GRAY))); fragment.setItemMeta(meta); player.getInventory().addItem(fragment).values().forEach(left->player.getWorld().dropItemNaturally(player.getLocation(),left)); player.getWorld().spawnParticle(Particle.ENCHANT,player.getLocation().add(0,1,0),24,.35,.5,.35,.05); player.playSound(player.getLocation(),Sound.UI_TOAST_CHALLENGE_COMPLETE,.5f,1.3f); }
     private FishingRarity rollFishingRarity() { double roll=Math.random()*100, total=0; for(FishingRarity rarity:FishingRarity.values()){total+=getConfig().getDouble("fishing.rarity."+rarity.id, switch(rarity){case COMMON->55;case RARE->28;case EPIC->12;case LEGENDARY->4.5;case MYTHIC->.45;case SECRET->.05;});if(roll<total)return rarity;} return FishingRarity.COMMON; }
     private ItemStack rollFishingBook() { FishingRarity rarity=rollFishingRarity(); String id=rarity.enchantments.get(getRandom().nextInt(rarity.enchantments.size())); int level=rarity==FishingRarity.COMMON||rarity==FishingRarity.RARE||rarity==FishingRarity.EPIC?1+getRandom().nextInt(Math.min(3,defaultMaxLevel(LegacyEnchant.find(id).orElseThrow()))):1; ItemStack book=createBook(id,level); ItemMeta meta=book.getItemMeta(); meta.displayName(Component.text("["+rarity.id.toUpperCase(Locale.ROOT)+"] "+pretty(id)+" "+roman(level),rarity.color)); book.setItemMeta(meta); return book; }
+    private void openFishingMenu(Player player) {
+        Inventory inventory=Bukkit.createInventory(new FishingMenuHolder(),54,FISHING_MENU_TITLE);
+        ItemStack border=new ItemStack(Material.GRAY_STAINED_GLASS_PANE); ItemMeta borderMeta=border.getItemMeta(); borderMeta.displayName(Component.empty()); border.setItemMeta(borderMeta);
+        for(int slot=0;slot<54;slot++) inventory.setItem(slot,border);
+        int slot=10;
+        for(FishingRarity rarity:FishingRarity.values()) for(String id:rarity.enchantments) {
+            ItemStack book=createBook(id,1); ItemMeta meta=book.getItemMeta(); meta.displayName(Component.text("["+rarity.id.toUpperCase(Locale.ROOT)+"] "+pretty(id),rarity.color)); meta.lore(List.of(Component.text("Max level: "+roman(defaultMaxLevel(LegacyEnchant.find(id).orElseThrow())),NamedTextColor.GRAY),Component.text("Gunakan /ce rodroll untuk roll buku.",NamedTextColor.DARK_GRAY))); book.setItemMeta(meta); inventory.setItem(slot++,book); if(slot%9==8)slot+=2;
+        }
+        player.openInventory(inventory);
+    }
     private boolean has(Player player, String id) { return highest(player,id)>0; }
     private int highest(Player player, String id) { int highest=customLevel(player.getInventory().getItemInMainHand(),id); highest=Math.max(highest,customLevel(player.getInventory().getItemInOffHand(),id)); for(ItemStack item:player.getInventory().getArmorContents()) highest=Math.max(highest,customLevel(item,id)); return highest; }
 
@@ -399,10 +415,12 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private String roman(int value) { String[] r={"","I","II","III","IV","V","VI","VII","VIII","IX","X"}; return value>0&&value<r.length?r[value]:String.valueOf(value); }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length == 1 && args[0].equalsIgnoreCase("menu") && sender instanceof Player player) { openFishingMenu(player); return true; }
         if (args.length == 1 && args[0].equalsIgnoreCase("reload")) { reloadConfig(); sender.sendMessage(Component.text("VelioraEnchant reloaded.",NamedTextColor.GREEN)); return true; }
         if (args.length == 2 && (args[0].equalsIgnoreCase("rodroll") || args[0].equalsIgnoreCase("fishroll"))) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} target.getInventory().addItem(rollFishingBook()).values().forEach(item->target.getWorld().dropItemNaturally(target.getLocation(),item)); sender.sendMessage(Component.text("Fishing rod enchant book di-roll.",NamedTextColor.GREEN)); return true; }
         if (args.length == 4 && args[0].equalsIgnoreCase("give")) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} int level; try{level=Integer.parseInt(args[3]);}catch(NumberFormatException e){return false;} String id=args[2].toLowerCase(Locale.ROOT); if(LegacyEnchant.find(id).isEmpty()){sender.sendMessage(Component.text("Enchant tidak dikenal.",NamedTextColor.RED));return true;} level=Math.clamp(level,1,getConfig().getInt("custom-enchants."+id+".max-level",3)); target.getInventory().addItem(createBook(id,level)).values().forEach(i->target.getWorld().dropItemNaturally(target.getLocation(),i)); sender.sendMessage(Component.text("Book diberikan.",NamedTextColor.GREEN));return true; }
         sender.sendMessage(Component.text("/venchant give <player> <enchant> <level> | /venchant reload",NamedTextColor.YELLOW)); return true;
     }
-    @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) { if(args.length==1)return List.of("give","reload","rodroll"); if(args.length==2&&(args[0].equalsIgnoreCase("give")||args[0].equalsIgnoreCase("rodroll")))return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(); if(args.length==3)return LegacyEnchant.ids(); return List.of(); }
+    @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) { if(args.length==1)return List.of("give","reload","rodroll","menu"); if(args.length==2&&(args[0].equalsIgnoreCase("give")||args[0].equalsIgnoreCase("rodroll")))return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(); if(args.length==3)return LegacyEnchant.ids(); return List.of(); }
+    private static final class FishingMenuHolder implements InventoryHolder { @Override public Inventory getInventory() { return null; } }
 }
