@@ -1,6 +1,6 @@
-# VelioraEnchant 1.0.1 - Paper 1.21.8+
+# VelioraEnchant 1.1.0 - Paper 1.21.8+
 # Old V1 names retained as safe enchant books; V2's high-level vanilla system is included too.
-config-version: 2
+config-version: 3
 
 overlevel:
   enabled: true
@@ -46,6 +46,10 @@ fishing:
 
 # Safe member progression. Chances stay intentionally low to protect the economy.
 distribution:
+  enchanting-table:
+    enabled: true
+    chance: 0.12
+    minimum-level-cost: 15
   structure-loot:
     enabled: true
     chance: 0.0075 # 0.75% per eligible generated container
@@ -70,8 +74,8 @@ distribution:
     master-price: 32
 custom-enchants:
   # Other catalogue entries are added automatically with their balanced max level on first startup.
-  lifesteal: { enabled: true, max-level: 5, heal-per-level: 0.35, cooldown-ticks: 20 }
-  autosmelt: { enabled: true, max-level: 1 }
+  life_steal: { enabled: true, max-level: 5, heal-per-level: 0.35, cooldown-ticks: 20 }
+  auto_smelt: { enabled: true, max-level: 1 }
   telepathy: { enabled: true, max-level: 1 }
   shield_resistance: { enabled: true, max-level: 5, reduction-per-level: 0.10 }
   wind_burst: { enabled: true, max-level: 3, fall-reduction-per-level: 0.10, duration-ticks: 80, cooldown-ticks: 220 }

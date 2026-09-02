@@ -1,6 +1,6 @@
 # VelioraEnchant
 
-Custom enchantment plugin for Veliora Gardens, rebuilt for modern Paper.
+Custom enchantment plugin for Veliora Gardens, rebuilt for modern Paper. Version 1.1.0 stores its own enchant IDs in item persistent data and runs every effect from VelioraEnchant listeners.
 
 ## Included
 
@@ -8,6 +8,9 @@ Custom enchantment plugin for Veliora Gardens, rebuilt for modern Paper.
 - V2 mechanics: Wind Burst and Shield Resistance.
 - Selected V1 mechanics ported safely: Lifesteal, Auto Smelt, Telepathy, and Vein Miner.
 - Custom books apply through an anvil and preserve multiple custom enchantments on an item.
+- Two identical custom books combine in an anvil (I + I becomes II up to the configured cap).
+- Enchanting tables can roll one compatible Veliora enchant after the vanilla enchant succeeds.
+- Legacy `lifesteal` and `autosmelt` books/configs are migrated to `life_steal` and `auto_smelt` without invalidating old books.
 
 Requires Paper 1.21.8+ and Java 21. Configure every cap, cooldown, and multiplier in `config.yml`.
 
