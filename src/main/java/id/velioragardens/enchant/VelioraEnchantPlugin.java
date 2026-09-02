@@ -434,15 +434,15 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         ItemStack book=new ItemStack(Material.ENCHANTED_BOOK); ItemMeta meta=book.getItemMeta();
         meta.getPersistentDataContainer().set(customKey, PersistentDataType.STRING, id);
         meta.getPersistentDataContainer().set(customKey(id),PersistentDataType.INTEGER,level);
-        meta.displayName(Component.text("✦ "+pretty(id)+" "+roman(level),color));
+        meta.displayName(Component.text(pretty(id)+" "+roman(level),color));
         List<Component> lore=new ArrayList<>();
-        lore.add(Component.text("✦ "+description(id),NamedTextColor.GRAY));
+        lore.add(Component.text(description(id),NamedTextColor.GRAY));
         lore.add(Component.text("",NamedTextColor.WHITE));
-        lore.add(Component.text("◆ Untuk: "+categoryLabel(enchant.category()),NamedTextColor.DARK_AQUA));
-        lore.add(Component.text("◆ Level: "+roman(level)+" / "+roman(defaultMaxLevel(enchant)),color));
-        if(rarity!=null) lore.add(Component.text("◆ Rarity: "+pretty(rarity.id),rarity.color));
+        lore.add(Component.text("Untuk: "+categoryLabel(enchant.category()),NamedTextColor.DARK_AQUA));
+        lore.add(Component.text("Level: "+roman(level)+" / "+roman(defaultMaxLevel(enchant)),color));
+        if(rarity!=null) lore.add(Component.text("Rarity: "+pretty(rarity.id),rarity.color));
         lore.add(Component.text("",NamedTextColor.WHITE));
-        lore.add(Component.text("⌁ Gabungkan di anvil dengan item yang sesuai.",NamedTextColor.DARK_GRAY));
+        lore.add(Component.text("Gabungkan di anvil dengan item yang sesuai.",NamedTextColor.DARK_GRAY));
         meta.lore(lore); book.setItemMeta(meta); return book;
     }
     private FishingRarity rarityFor(String id) { return Arrays.stream(FishingRarity.values()).filter(rarity -> rarity.enchantments.contains(id)).findFirst().orElse(null); }
@@ -512,8 +512,11 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         ItemMeta meta = result.getItemMeta(); if (meta == null) return false;
         meta.getPersistentDataContainer().set(customKey(id), PersistentDataType.INTEGER, merged);
         List<Component> lore = new ArrayList<>(Optional.ofNullable(meta.lore()).orElse(List.of()));
-        lore.removeIf(line -> PlainTextComponentSerializer.plainText().serialize(line).startsWith("✦ " + pretty(id)));
-        lore.add(Component.text("✦ " + pretty(id) + " " + roman(merged), NamedTextColor.AQUA));
+        lore.removeIf(line -> {
+            String plain=PlainTextComponentSerializer.plainText().serialize(line);
+            return plain.startsWith("✦ " + pretty(id)) || plain.startsWith(pretty(id) + " ");
+        });
+        lore.add(Component.text(pretty(id) + " " + roman(merged), NamedTextColor.AQUA));
         meta.lore(lore); result.setItemMeta(meta); return true;
     }
     private boolean canApply(Material material, String id) { return LegacyEnchant.find(id).map(type -> type.accepts(material)).orElse(false); }
