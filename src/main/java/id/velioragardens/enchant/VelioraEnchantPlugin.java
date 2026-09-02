@@ -358,7 +358,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private FishingRarity rollFishingRarity() { return rollFishingRarity(FishingRarity.SECRET); }
     private FishingRarity rollFishingRarity(FishingRarity cap) { double total=0; for(FishingRarity rarity:FishingRarity.values()){if(rarity.ordinal()>cap.ordinal())break;total+=getConfig().getDouble("fishing.rarity."+rarity.id, switch(rarity){case COMMON->55;case RARE->28;case EPIC->12;case LEGENDARY->4.5;case MYTHIC->.45;case SECRET->.05;});} double roll=Math.random()*total, current=0; for(FishingRarity rarity:FishingRarity.values()){if(rarity.ordinal()>cap.ordinal())break;current+=getConfig().getDouble("fishing.rarity."+rarity.id,0);if(roll<current)return rarity;} return FishingRarity.COMMON; }
     private ItemStack rollFishingBook() { return rollFishingBook(FishingRarity.SECRET); }
-    private ItemStack rollFishingBook(FishingRarity cap) { FishingRarity rarity=rollFishingRarity(cap); String id=rarity.enchantments.get(getRandom().nextInt(rarity.enchantments.size())); int level=rarity==FishingRarity.COMMON||rarity==FishingRarity.RARE||rarity==FishingRarity.EPIC?1+getRandom().nextInt(Math.min(3,defaultMaxLevel(LegacyEnchant.find(id).orElseThrow()))):1; ItemStack book=createBook(id,level); ItemMeta meta=book.getItemMeta(); meta.displayName(Component.text("["+rarity.id.toUpperCase(Locale.ROOT)+"] "+pretty(id)+" "+roman(level),rarity.color)); book.setItemMeta(meta); return book; }
+    private ItemStack rollFishingBook(FishingRarity cap) { FishingRarity rarity=rollFishingRarity(cap); String id=rarity.enchantments.get(getRandom().nextInt(rarity.enchantments.size())); int level=rarity==FishingRarity.COMMON||rarity==FishingRarity.RARE||rarity==FishingRarity.EPIC?1+getRandom().nextInt(Math.min(3,defaultMaxLevel(LegacyEnchant.find(id).orElseThrow()))):1; return createBook(id,level,rarity); }
     private ItemStack rollLibrarianBook(FishingRarity cap) { List<String> ids=switch(cap){case COMMON->List.of("speed","haste_aura","night_vision","water_breathing");case RARE->List.of("lifesteal","bleed","poison","critical","regeneration");default->List.of("barrier","tank","protection","fire_boots","shield_resistance");}; String id=ids.get(getRandom().nextInt(ids.size())); return createBook(id,1); }
     private MerchantRecipe specialRecipe(ItemStack result,int emeralds,Material material) { MerchantRecipe recipe=new MerchantRecipe(result,1); recipe.addIngredient(new ItemStack(Material.EMERALD,Math.min(64,Math.max(1,emeralds)))); recipe.addIngredient(new ItemStack(material)); return recipe; }
     private void openFishingMenu(Player player) {
@@ -367,7 +367,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         for(int slot=0;slot<54;slot++) inventory.setItem(slot,border);
         int slot=10;
         for(FishingRarity rarity:FishingRarity.values()) for(String id:rarity.enchantments) {
-            ItemStack book=createBook(id,1); ItemMeta meta=book.getItemMeta(); meta.displayName(Component.text("["+rarity.id.toUpperCase(Locale.ROOT)+"] "+pretty(id),rarity.color)); meta.lore(List.of(Component.text("Max level: "+roman(defaultMaxLevel(LegacyEnchant.find(id).orElseThrow())),NamedTextColor.GRAY),Component.text("Gunakan /ce rodroll untuk roll buku.",NamedTextColor.DARK_GRAY))); book.setItemMeta(meta); inventory.setItem(slot++,book); if(slot%9==8)slot+=2;
+            ItemStack book=createBook(id,1,rarity); inventory.setItem(slot++,book); if(slot%9==8)slot+=2;
         }
         player.openInventory(inventory);
     }
@@ -427,7 +427,78 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         player.getWorld().spawnParticle(Particle.HEART,player.getLocation().add(0,1,0),Math.min(8,level*2),.3,.35,.3,0);
         player.playSound(player.getLocation(),Sound.ENTITY_PLAYER_LEVELUP,.35f,1.6f);
     }
-    private ItemStack createBook(String id, int level) { ItemStack book=new ItemStack(Material.ENCHANTED_BOOK); ItemMeta meta=book.getItemMeta(); meta.getPersistentDataContainer().set(customKey, PersistentDataType.STRING, id); meta.getPersistentDataContainer().set(customKey(id),PersistentDataType.INTEGER,level); meta.displayName(Component.text(pretty(id)+" "+roman(level), NamedTextColor.AQUA)); meta.lore(List.of(Component.text("Gabungkan di anvil dengan item yang sesuai.",NamedTextColor.DARK_GRAY))); book.setItemMeta(meta); return book; }
+    private ItemStack createBook(String id, int level) { return createBook(id,level,rarityFor(id)); }
+    private ItemStack createBook(String id, int level, FishingRarity rarity) {
+        LegacyEnchant enchant=LegacyEnchant.find(id).orElseThrow();
+        NamedTextColor color=rarity==null?categoryColor(enchant.category()):rarity.color;
+        ItemStack book=new ItemStack(Material.ENCHANTED_BOOK); ItemMeta meta=book.getItemMeta();
+        meta.getPersistentDataContainer().set(customKey, PersistentDataType.STRING, id);
+        meta.getPersistentDataContainer().set(customKey(id),PersistentDataType.INTEGER,level);
+        meta.displayName(Component.text("✦ "+pretty(id)+" "+roman(level),color));
+        List<Component> lore=new ArrayList<>();
+        lore.add(Component.text("✦ "+description(id),NamedTextColor.GRAY));
+        lore.add(Component.text("",NamedTextColor.WHITE));
+        lore.add(Component.text("◆ Untuk: "+categoryLabel(enchant.category()),NamedTextColor.DARK_AQUA));
+        lore.add(Component.text("◆ Level: "+roman(level)+" / "+roman(defaultMaxLevel(enchant)),color));
+        if(rarity!=null) lore.add(Component.text("◆ Rarity: "+pretty(rarity.id),rarity.color));
+        lore.add(Component.text("",NamedTextColor.WHITE));
+        lore.add(Component.text("⌁ Gabungkan di anvil dengan item yang sesuai.",NamedTextColor.DARK_GRAY));
+        meta.lore(lore); book.setItemMeta(meta); return book;
+    }
+    private FishingRarity rarityFor(String id) { return Arrays.stream(FishingRarity.values()).filter(rarity -> rarity.enchantments.contains(id)).findFirst().orElse(null); }
+    private NamedTextColor categoryColor(LegacyEnchant.Category category) { return switch(category) { case WEAPON -> NamedTextColor.RED; case TOOL -> NamedTextColor.GOLD; case ARMOR -> NamedTextColor.AQUA; case BOW -> NamedTextColor.GREEN; case SHIELD -> NamedTextColor.LIGHT_PURPLE; case MACE -> NamedTextColor.DARK_PURPLE; case FISHING_ROD -> NamedTextColor.BLUE; }; }
+    private String categoryLabel(LegacyEnchant.Category category) { return switch(category) { case WEAPON -> "Pedang, kapak, mace, atau trident"; case TOOL -> "Pickaxe, kapak, sekop, atau hoe"; case ARMOR -> "Armor atau elytra"; case BOW -> "Bow atau crossbow"; case SHIELD -> "Shield"; case MACE -> "Mace"; case FISHING_ROD -> "Fishing Rod"; }; }
+    private String description(String id) { return switch(id) {
+        case "lifesteal" -> "Serangan memulihkan sedikit health.";
+        case "bleed" -> "Memberi efek wither singkat pada target.";
+        case "poison" -> "Memberi racun singkat pada target.";
+        case "blind", "debuff" -> "Memberi kebutaan singkat pada target.";
+        case "burning" -> "Membakar target saat terkena serangan.";
+        case "critical" -> "Memiliki peluang damage critical lebih besar.";
+        case "lightning" -> "Memanggil kilat visual dengan cooldown.";
+        case "freeze" -> "Menambah efek beku pada target.";
+        case "wind_strike", "sudden_blow" -> "Mendorong target menjauh dengan cooldown.";
+        case "sharpen", "blast" -> "Menambah damage serangan.";
+        case "omnivamp", "soul_eater" -> "Menyembuhkan pemakai berdasarkan damage.";
+        case "cobweb" -> "Menjebak target dalam cobweb sementara.";
+        case "storm" -> "Memanggil kilat dan memperlambat target.";
+        case "nulled" -> "Menghapus efek potion milik target.";
+        case "craving" -> "Mengurangi rasa lapar pemain lawan.";
+        case "emnity" -> "Memberi kelemahan singkat pada target.";
+        case "grimoire" -> "Mengacak sihir slow, weak, api, atau heal.";
+        case "hail_storm" -> "Menyebabkan snow burst, slow, dan damage kecil.";
+        case "illusion" -> "Memberi invisibility singkat setelah serangan.";
+        case "implant" -> "Memberi EXP tambahan ketika menyerang.";
+        case "steal" -> "Memindahkan sebagian hunger dari lawan.";
+        case "wind_burst" -> "Melontarkan target dan mengurangi fall damage.";
+        case "blinding_arrow" -> "Panah memberi kebutaan singkat.";
+        case "frost_arrow" -> "Panah memberi efek beku.";
+        case "focus_fire" -> "Panah menghasilkan damage tambahan.";
+        case "shield_resistance" -> "Peluang mengurangi cooldown shield akibat kapak.";
+        case "protection", "guarded", "obsidian_plate", "ductile", "sturdy" -> "Mengurangi damage yang diterima saat dipakai.";
+        case "emergency_defence" -> "Defense bertambah saat health rendah.";
+        case "poisonous_thorns" -> "Penyerang menerima racun saat memukulmu.";
+        case "auto_repair" -> "Memperbaiki item yang dipakai setiap 10 detik saat rusak.";
+        case "unbreaking" -> "Memiliki peluang durability tidak berkurang.";
+        case "autosmelt" -> "Ore tertentu langsung menjadi ingot saat ditambang.";
+        case "telepathy" -> "Drop block langsung masuk ke inventory.";
+        case "auto_farm" -> "Tanaman matang ditanam kembali otomatis.";
+        case "lucky_treasure" -> "Memiliki peluang mendapat EXP bonus saat menambang.";
+        case "experience", "levels" -> "Meningkatkan EXP dari block yang ditambang.";
+        case "auto_reel" -> "Memberi tanda saat ikan menggigit.";
+        case "guardian_hook" -> "Memperlambat mob yang tertarik pancing.";
+        case "deep_hook" -> "Memberi EXP tambahan ketika memancing.";
+        case "fisherman_heal" -> "Memulihkan health saat mendapat tangkapan.";
+        case "double_catch", "angler_luck" -> "Memiliki peluang mendapat tangkapan ganda.";
+        case "treasure_hook" -> "Memiliki peluang mendapat harta laut tambahan.";
+        case "ocean_blessing" -> "Meningkatkan peluang harta ketika di ocean.";
+        case "river_spirit" -> "Memberi EXP tambahan ketika memancing di river.";
+        case "sunken_relic" -> "Peluang sangat kecil memperoleh Sunken Relic.";
+        case "storm_angler" -> "Memberi EXP tambahan ketika badai.";
+        case "mermaid_tears" -> "Memberi regen singkat saat memancing.";
+        case "veliora_secret" -> "Peluang sangat kecil memperoleh Secret Fragment.";
+        default -> "Kemampuan khusus Veliora untuk perlengkapanmu.";
+    }; }
     private NamespacedKey customKey(String id) { return new NamespacedKey(this, "ce_" + id); }
     private boolean isCustomBook(ItemStack item) { return item.getType() == Material.ENCHANTED_BOOK && item.getItemMeta() != null && item.getItemMeta().getPersistentDataContainer().has(customKey, PersistentDataType.STRING); }
     private boolean applyCustomBook(ItemStack left, ItemStack right, ItemStack result) {
