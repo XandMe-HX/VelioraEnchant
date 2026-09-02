@@ -1,5 +1,5 @@
 name: VelioraEnchant
-version: '1.0.0'
+version: '1.0.1'
 main: id.velioragardens.enchant.VelioraEnchantPlugin
 api-version: '1.21'
 author: XandMe-HX
@@ -9,7 +9,10 @@ commands:
     description: Manage Veliora custom enchantments.
     usage: /<command> give <player> <enchant> <level> | /<command> reload
     aliases: [venchant, ce, enchants, customenchant, customenchants, overenchant, enchantshop, es]
-    permission: velioraenchant.admin
 permissions:
+  velioraenchant.use:
+    description: View the enchant guide and catalogue.
+    default: true
   velioraenchant.admin:
+    description: Give books and reload VelioraEnchant.
     default: op
