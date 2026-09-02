@@ -17,6 +17,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
+import org.bukkit.event.enchantment.EnchantItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
@@ -40,7 +41,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, TabExecutor {
     private NamespacedKey customKey;
-    private final Map<UUID, Long> cooldowns = new ConcurrentHashMap<>();
+    private final Map<String, Long> cooldowns = new ConcurrentHashMap<>();
     private final Map<UUID, Long> windUntil = new ConcurrentHashMap<>();
     private final Map<UUID, Long> repairReady = new ConcurrentHashMap<>();
     private final Set<Location> veinBreaking = ConcurrentHashMap.newKeySet();
@@ -67,6 +68,9 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             getConfig().set("distribution.fisherman.enabled",true);
             getConfig().set("config-version",2);
         }
+        migrateLegacyId("lifesteal", "life_steal");
+        migrateLegacyId("autosmelt", "auto_smelt");
+        getConfig().set("config-version",3);
         saveConfig();
         distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution"));
         customKey = new NamespacedKey(this, "custom_enchant");
@@ -116,13 +120,30 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     }
 
     @EventHandler(ignoreCancelled = true)
+    public void onEnchantingTable(EnchantItemEvent event) {
+        if (!getConfig().getBoolean("distribution.enchanting-table.enabled", true)) return;
+        if (event.getExpLevelCost() < getConfig().getInt("distribution.enchanting-table.minimum-level-cost", 15)) return;
+        if (Math.random() >= getConfig().getDouble("distribution.enchanting-table.chance", .12)) return;
+        Material material = event.getItem().getType();
+        List<LegacyEnchant> candidates = Arrays.stream(LegacyEnchant.values())
+            .filter(enchant -> enabled(enchant.id()))
+            .filter(enchant -> material == Material.BOOK || material == Material.ENCHANTED_BOOK || enchant.accepts(material))
+            .toList();
+        if (candidates.isEmpty()) return;
+        LegacyEnchant enchant = candidates.get(getRandom().nextInt(candidates.size()));
+        int level = Math.min(defaultMaxLevel(enchant), Math.max(1, event.getExpLevelCost() / 15));
+        applyCustomEnchant(event.getItem(), enchant.id(), level);
+        event.getEnchanter().sendActionBar(Component.text("Custom enchant didapat: " + pretty(enchant.id()) + " " + roman(level), categoryColor(enchant.category())));
+    }
+
+    @EventHandler(ignoreCancelled = true)
     public void onHit(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player player) || !(event.getEntity() instanceof LivingEntity target)) return;
         if (player.equals(target) || player.getGameMode() == GameMode.SPECTATOR) return;
         ItemStack weapon = player.getInventory().getItemInMainHand();
-        int lifesteal = customLevel(weapon, "lifesteal");
-        if (lifesteal > 0 && enabled("lifesteal") && ready(player, "lifesteal", getConfig().getLong("custom-enchants.lifesteal.cooldown-ticks", 20))) {
-            double heal = getConfig().getDouble("custom-enchants.lifesteal.heal-per-level", .35) * lifesteal;
+        int lifesteal = customLevel(weapon, "life_steal");
+        if (lifesteal > 0 && enabled("life_steal") && ready(player, "life_steal", getConfig().getLong("custom-enchants.life_steal.cooldown-ticks", 20))) {
+            double heal = getConfig().getDouble("custom-enchants.life_steal.heal-per-level", .35) * lifesteal;
             player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + heal));
             player.getWorld().spawnParticle(Particle.HEART, target.getLocation().add(0, 1, 0), 2, .25, .3, .25, 0);
         }
@@ -161,6 +182,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         if (implant > 0 && ready(player,"implant",40)) player.giveExp(implant * 2);
         int steal = customLevel(weapon, "steal");
         if (steal > 0 && target instanceof Player victim && ready(player,"steal",60)) { int amount=Math.min(steal, victim.getFoodLevel()); victim.setFoodLevel(victim.getFoodLevel()-amount); player.setFoodLevel(Math.min(20,player.getFoodLevel()+amount)); }
+        int frozenHook=customLevel(weapon,"frozen_hook"); if(frozenHook>0&&ready(player,"frozen_hook",45)){target.setFreezeTicks(Math.min(160,target.getFreezeTicks()+frozenHook*35));target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,30+frozenHook*10,0));}
         if (event.getFinalDamage() >= target.getHealth()) applyExcellentKillHeal(player, weapon, "vampire", "vampire");
         int wind = customLevel(weapon, "wind_burst");
         if (wind > 0 && enabled("wind_burst") && weapon.getType() == Material.MACE && ready(player, "wind_burst", getConfig().getLong("custom-enchants.wind_burst.cooldown-ticks", 220))) {
@@ -196,6 +218,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         int blind = customLevel(bow, "blinding_arrow"); if (blind > 0 && ready(player,"blinding_arrow",35)) target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 20 * blind, 0));
         int frost = customLevel(bow, "frost_arrow"); if (frost > 0 && ready(player,"frost_arrow",35)) target.setFreezeTicks(Math.min(140, target.getFreezeTicks() + frost * 30));
         int focus = customLevel(bow, "focus_fire"); if (focus > 0) event.setDamage(event.getDamage() * (1 + focus * .08));
+        int frozenHook=customLevel(bow,"frozen_hook"); if(frozenHook>0&&ready(player,"frozen_hook",45)){target.setFreezeTicks(Math.min(160,target.getFreezeTicks()+frozenHook*35));target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,30+frozenHook*10,0));}
         if (event.getFinalDamage() >= target.getHealth()) applyExcellentKillHeal(player, bow, "vampiricarrows", "vampiric_arrows");
     }
 
@@ -223,6 +246,8 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         reduction += highest(player,"obsidian_plate") * .025;
         reduction += highest(player,"ductile") * .015;
         reduction += highest(player,"sturdy") * .015;
+        reduction += highest(player,"block") * .02;
+        reduction += highest(player,"force_shield") * .025;
         if (player.getHealth() / player.getMaxHealth() < .35) reduction += highest(player,"emergency_defence") * .04;
         if (reduction > 0) event.setDamage(event.getDamage() * Math.max(.35, 1 - Math.min(.55, reduction)));
         int thorns = highest(player,"poisonous_thorns");
@@ -235,16 +260,17 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         if (customLevel(item,"auto_repair") > 0) repairReady.put(event.getPlayer().getUniqueId(), tick());
         if (unbreaking > 0 && Math.random() < Math.min(.75, unbreaking * .12)) event.setCancelled(true);
     }
-    @EventHandler public void onQuit(PlayerQuitEvent event) { UUID id=event.getPlayer().getUniqueId(); cooldowns.remove(id); windUntil.remove(id); repairReady.remove(id); }
+    @EventHandler public void onQuit(PlayerQuitEvent event) { UUID id=event.getPlayer().getUniqueId(); cooldowns.keySet().removeIf(key->key.startsWith(id+":")); windUntil.remove(id); repairReady.remove(id); }
 
     @EventHandler(ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
         Player player = event.getPlayer(); ItemStack tool = player.getInventory().getItemInMainHand(); Block origin = event.getBlock();
-        boolean smelted = customLevel(tool, "autosmelt") > 0 && enabled("autosmelt") && autosmelt(event, player, origin);
+        boolean smelted = customLevel(tool, "auto_smelt") > 0 && enabled("auto_smelt") && autosmelt(event, player, origin);
         if (!smelted && customLevel(tool, "telepathy") > 0 && enabled("telepathy")) telepathy(event, player, origin);
         if (customLevel(tool,"flower") > 0 && origin.getType() == Material.GRASS_BLOCK && ready(player,"flower",30)) origin.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, origin.getLocation().add(.5,1,.5), 8,.4,.2,.4,0);
         if (customLevel(tool,"auto_farm") > 0 && origin.getBlockData() instanceof Ageable crop && crop.getAge() >= crop.getMaximumAge()) replantCrop(origin);
         int treasure=customLevel(tool,"lucky_treasure"); if(treasure>0 && ready(player,"lucky_treasure",25) && Math.random()<Math.min(.20, treasure*.035)) { player.giveExp(treasure*3); player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER,origin.getLocation().add(.5,.5,.5),10,.25,.25,.25,0); }
+        int luck=customLevel(tool,"luck"); if(luck>0&&Math.random()<Math.min(.15,luck*.03)) event.setExpToDrop(event.getExpToDrop()+luck);
         int experience=Math.max(customLevel(tool,"experience"),customLevel(tool,"levels")); if(experience>0) event.setExpToDrop((int)Math.ceil(event.getExpToDrop()*(1+experience*.15)));
     }
 
@@ -303,6 +329,8 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         int relic=customLevel(rod,"sunken_relic"); if(relic>0&&Math.random()<.002*relic) giveFragment(player,"Sunken Relic Fragment",NamedTextColor.GOLD);
         if(customLevel(rod,"storm_angler")>0&&player.getWorld().hasStorm()) player.giveExp(3);
         if(customLevel(rod,"mermaid_tears")>0&&ready(player,"mermaid_tears",80)) player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION,60,0));
+        int abyss=customLevel(rod,"abyssal_hook"); if(abyss>0&&player.getLocation().getY()<45&&Math.random()<.01*abyss) giveFragment(player,"Abyssal Fragment",NamedTextColor.DARK_PURPLE);
+        int leviathan=customLevel(rod,"leviathan_line"); if(leviathan>0&&Math.random()<.025*leviathan){caught.getItemStack().setAmount(Math.min(caught.getItemStack().getMaxStackSize(),caught.getItemStack().getAmount()+1));player.playSound(player.getLocation(),Sound.ENTITY_ELDER_GUARDIAN_AMBIENT,.25f,1.6f);}
         if(customLevel(rod,"veliora_secret")>0&&Math.random()<getConfig().getDouble("fishing.secret-catch-chance",.0005)) giveFragment(player,"Veliora Secret Fragment",NamedTextColor.DARK_PURPLE);
     }
     @EventHandler(ignoreCancelled = true)
@@ -351,6 +379,8 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             applyPassive(player, "regain", PotionEffectType.REGENERATION, 30, 0);
             applyPassive(player, "light_spirit", PotionEffectType.NIGHT_VISION, 30, 0);
             applyPassive(player, "axolotl_buff", PotionEffectType.CONDUIT_POWER, 30, 0);
+            if(has(player,"stella")&&player.getWorld().getTime()>12500) applyPassive(player,"stella",PotionEffectType.LUCK,30,0);
+            if(has(player,"time_travel")&&player.isSprinting()) applyPassive(player,"time_travel",PotionEffectType.SPEED,12,0);
             if (has(player, "auto_repair") && repairReady.remove(player.getUniqueId()) != null) repairHeldItem(player, highest(player, "auto_repair"));
             if (has(player,"anti_stun")) { player.removePotionEffect(PotionEffectType.SLOWNESS); player.removePotionEffect(PotionEffectType.BLINDNESS); }
         }
@@ -368,7 +398,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private FishingRarity rollFishingRarity(FishingRarity cap) { double total=0; for(FishingRarity rarity:FishingRarity.values()){if(rarity.ordinal()>cap.ordinal())break;total+=getConfig().getDouble("fishing.rarity."+rarity.id, switch(rarity){case COMMON->55;case RARE->28;case EPIC->12;case LEGENDARY->4.5;case MYTHIC->.45;case SECRET->.05;});} double roll=Math.random()*total, current=0; for(FishingRarity rarity:FishingRarity.values()){if(rarity.ordinal()>cap.ordinal())break;current+=getConfig().getDouble("fishing.rarity."+rarity.id,0);if(roll<current)return rarity;} return FishingRarity.COMMON; }
     private ItemStack rollFishingBook() { return rollFishingBook(FishingRarity.SECRET); }
     private ItemStack rollFishingBook(FishingRarity cap) { FishingRarity rarity=rollFishingRarity(cap); String id=rarity.enchantments.get(getRandom().nextInt(rarity.enchantments.size())); int level=rarity==FishingRarity.COMMON||rarity==FishingRarity.RARE||rarity==FishingRarity.EPIC?1+getRandom().nextInt(Math.min(3,defaultMaxLevel(LegacyEnchant.find(id).orElseThrow()))):1; return createBook(id,level,rarity); }
-    private ItemStack rollLibrarianBook(FishingRarity cap) { List<String> ids=switch(cap){case COMMON->List.of("speed","haste_aura","night_vision","water_breathing");case RARE->List.of("lifesteal","bleed","poison","critical","regeneration");default->List.of("barrier","tank","protection","fire_boots","shield_resistance");}; String id=ids.get(getRandom().nextInt(ids.size())); return createBook(id,1); }
+    private ItemStack rollLibrarianBook(FishingRarity cap) { List<String> ids=switch(cap){case COMMON->List.of("speed","haste_aura","night_vision","water_breathing");case RARE->List.of("life_steal","bleed","poison","critical","regeneration");default->List.of("barrier","tank","protection","fire_boots","shield_resistance");}; String id=ids.get(getRandom().nextInt(ids.size())); return createBook(id,1); }
     private MerchantRecipe specialRecipe(ItemStack result,int emeralds,Material material) { MerchantRecipe recipe=new MerchantRecipe(result,1); recipe.addIngredient(new ItemStack(Material.EMERALD,Math.min(64,Math.max(1,emeralds)))); recipe.addIngredient(new ItemStack(material)); return recipe; }
     private void openFishingMenu(Player player) {
         Inventory inventory=Bukkit.createInventory(new FishingMenuHolder(),54,FISHING_MENU_TITLE);
@@ -383,7 +413,15 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private boolean has(Player player, String id) { return highest(player,id)>0; }
     private int highest(Player player, String id) { int highest=customLevel(player.getInventory().getItemInMainHand(),id); highest=Math.max(highest,customLevel(player.getInventory().getItemInOffHand(),id)); for(ItemStack item:player.getInventory().getArmorContents()) highest=Math.max(highest,customLevel(item,id)); return highest; }
 
-    private boolean enabled(String id) { return getConfig().getBoolean("custom-enchants." + id + ".enabled", true); }
+    private String canonicalId(String id) { return LegacyEnchant.find(id).map(LegacyEnchant::id).orElse(id.toLowerCase(Locale.ROOT)); }
+    private void migrateLegacyId(String oldId, String newId) {
+        String oldPath="custom-enchants."+oldId, newPath="custom-enchants."+newId;
+        if (getConfig().isConfigurationSection(oldPath)) {
+            if (!getConfig().isConfigurationSection(newPath)) getConfig().set(newPath,getConfig().getConfigurationSection(oldPath).getValues(true));
+            getConfig().set(oldPath,null);
+        }
+    }
+    private boolean enabled(String id) { return getConfig().getBoolean("custom-enchants." + canonicalId(id) + ".enabled", true); }
     private int defaultMaxLevel(LegacyEnchant enchant) {
         return switch (enchant) {
             case AUTO_SMELT, TELEPATHY, AUTO_FARM, PHOENIX, SECOND_LIFE, DEATH_ANGEL -> 1;
@@ -395,13 +433,16 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     }
     private int cap(String id, int fallback) { return Math.max(1, getConfig().getInt("overlevel.caps." + id, fallback)); }
     private long tick() { return getServer().getCurrentTick(); }
-    private boolean ready(Player player, String id, long fallbackTicks) { long configured=getConfig().getLong("custom-enchants."+id+".cooldown-ticks", -1); long ticks=configured>=0?configured:fallbackTicks; long now=tick(), until=cooldowns.getOrDefault(player.getUniqueId(), 0L); if(until>now) return false; cooldowns.put(player.getUniqueId(), now+Math.max(0,ticks)); return true; }
+    private boolean ready(Player player, String id, long fallbackTicks) { id=canonicalId(id); long configured=getConfig().getLong("custom-enchants."+id+".cooldown-ticks", -1); long ticks=configured>=0?configured:fallbackTicks; long now=tick(); String key=player.getUniqueId()+":"+id; long until=cooldowns.getOrDefault(key,0L); if(until>now)return false; cooldowns.put(key,now+Math.max(0,ticks)); return true; }
     private int enchantLevel(ItemStack item, Enchantment enchant) { if(item.getType()==Material.ENCHANTED_BOOK && item.getItemMeta() instanceof EnchantmentStorageMeta meta) return meta.getStoredEnchantLevel(enchant); return item.getEnchantmentLevel(enchant); }
     private void setEnchant(ItemStack item, Enchantment enchant, int level) { ItemMeta meta=item.getItemMeta(); if(meta instanceof EnchantmentStorageMeta book) { book.addStoredEnchant(enchant, level, true); item.setItemMeta(book); } else item.addUnsafeEnchantment(enchant, level); }
     private int customLevel(ItemStack item, String id) {
         if(item == null || item.getType().isAir() || item.getItemMeta()==null) return 0;
-        int level=item.getItemMeta().getPersistentDataContainer().getOrDefault(customKey(id), PersistentDataType.INTEGER, 0);
-        return level > 0 && !hasExcellentEquivalent(item,id) ? level : 0;
+        String canonical=canonicalId(id);
+        int level=item.getItemMeta().getPersistentDataContainer().getOrDefault(customKey(canonical), PersistentDataType.INTEGER, 0);
+        if(level==0 && canonical.equals("life_steal")) level=item.getItemMeta().getPersistentDataContainer().getOrDefault(customKey("lifesteal"),PersistentDataType.INTEGER,0);
+        if(level==0 && canonical.equals("auto_smelt")) level=item.getItemMeta().getPersistentDataContainer().getOrDefault(customKey("autosmelt"),PersistentDataType.INTEGER,0);
+        return level > 0 && !hasExcellentEquivalent(item,canonical) ? level : 0;
     }
     private boolean hasExcellentEquivalent(ItemStack item, String velioraId) {
         if (!excellentEnchantsPresent || !getConfig().getBoolean("excellent-enchants-bridge.enabled", true)) return false;
@@ -438,6 +479,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     }
     private ItemStack createBook(String id, int level) { return createBook(id,level,rarityFor(id)); }
     private ItemStack createBook(String id, int level, FishingRarity rarity) {
+        id=canonicalId(id);
         LegacyEnchant enchant=LegacyEnchant.find(id).orElseThrow();
         NamedTextColor color=rarity==null?categoryColor(enchant.category()):rarity.color;
         ItemStack book=new ItemStack(Material.ENCHANTED_BOOK); ItemMeta meta=book.getItemMeta();
@@ -458,7 +500,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private NamedTextColor categoryColor(LegacyEnchant.Category category) { return switch(category) { case WEAPON -> NamedTextColor.RED; case TOOL -> NamedTextColor.GOLD; case ARMOR -> NamedTextColor.AQUA; case BOW -> NamedTextColor.GREEN; case SHIELD -> NamedTextColor.LIGHT_PURPLE; case MACE -> NamedTextColor.DARK_PURPLE; case FISHING_ROD -> NamedTextColor.BLUE; }; }
     private String categoryLabel(LegacyEnchant.Category category) { return switch(category) { case WEAPON -> "Pedang, kapak, mace, atau trident"; case TOOL -> "Pickaxe, kapak, sekop, atau hoe"; case ARMOR -> "Armor atau elytra"; case BOW -> "Bow atau crossbow"; case SHIELD -> "Shield"; case MACE -> "Mace"; case FISHING_ROD -> "Fishing Rod"; }; }
     private String description(String id) { return switch(id) {
-        case "lifesteal" -> "Serangan memulihkan sedikit health.";
+        case "life_steal" -> "Serangan memulihkan sedikit health.";
         case "bleed" -> "Memberi efek wither singkat pada target.";
         case "poison" -> "Memberi racun singkat pada target.";
         case "blind", "debuff" -> "Memberi kebutaan singkat pada target.";
@@ -489,7 +531,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         case "poisonous_thorns" -> "Penyerang menerima racun saat memukulmu.";
         case "auto_repair" -> "Memperbaiki item yang dipakai setiap 10 detik saat rusak.";
         case "unbreaking" -> "Memiliki peluang durability tidak berkurang.";
-        case "autosmelt" -> "Ore tertentu langsung menjadi ingot saat ditambang.";
+        case "auto_smelt" -> "Ore tertentu langsung menjadi ingot saat ditambang.";
         case "telepathy" -> "Drop block langsung masuk ke inventory.";
         case "auto_farm" -> "Tanaman matang ditanam kembali otomatis.";
         case "lucky_treasure" -> "Memiliki peluang mendapat EXP bonus saat menambang.";
@@ -512,8 +554,18 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private boolean isCustomBook(ItemStack item) { return item.getType() == Material.ENCHANTED_BOOK && item.getItemMeta() != null && item.getItemMeta().getPersistentDataContainer().has(customKey, PersistentDataType.STRING); }
     private boolean applyCustomBook(ItemStack left, ItemStack right, ItemStack result) {
         if (right.getType() != Material.ENCHANTED_BOOK || right.getItemMeta() == null) return false;
-        String id = right.getItemMeta().getPersistentDataContainer().get(customKey, PersistentDataType.STRING);
-        if (id == null || LegacyEnchant.find(id).isEmpty() || !canApply(left.getType(), id)) return false;
+        String rawId = right.getItemMeta().getPersistentDataContainer().get(customKey, PersistentDataType.STRING);
+        if (rawId == null || LegacyEnchant.find(rawId).isEmpty()) return false;
+        String id=canonicalId(rawId);
+        if (left.getType()==Material.ENCHANTED_BOOK && isCustomBook(left)) {
+            String leftId=left.getItemMeta().getPersistentDataContainer().get(customKey,PersistentDataType.STRING);
+            if (leftId==null || !canonicalId(leftId).equals(id)) return false;
+            int incoming=customLevel(right,id), current=customLevel(left,id);
+            int merged=Math.min(getConfig().getInt("custom-enchants."+id+".max-level",3),incoming==current?current+1:Math.max(incoming,current));
+            if(merged<=current)return false;
+            ItemStack book=createBook(id,merged); result.setType(book.getType()); result.setItemMeta(book.getItemMeta()); return true;
+        }
+        if (!canApply(left.getType(), id)) return false;
         int incoming = customLevel(right, id); if (incoming < 1) return false;
         int current=customLevel(left,id);
         int merged = Math.min(getConfig().getInt("custom-enchants." + id + ".max-level", 3), incoming == current ? current + 1 : Math.max(incoming, current));
@@ -528,6 +580,15 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         lore.add(Component.text(pretty(id) + " " + roman(merged), NamedTextColor.AQUA));
         meta.lore(lore); result.setItemMeta(meta); return true;
     }
+    private void applyCustomEnchant(ItemStack item,String id,int level) {
+        id=canonicalId(id); ItemMeta meta=item.getItemMeta(); if(meta==null)return;
+        meta.getPersistentDataContainer().set(customKey(id),PersistentDataType.INTEGER,level);
+        if(item.getType()==Material.BOOK || item.getType()==Material.ENCHANTED_BOOK) meta.getPersistentDataContainer().set(customKey,PersistentDataType.STRING,id);
+        List<Component> lore=new ArrayList<>(Optional.ofNullable(meta.lore()).orElse(List.of()));
+        String title=pretty(id); lore.removeIf(line->PlainTextComponentSerializer.plainText().serialize(line).startsWith(title+" "));
+        lore.add(Component.text(title+" "+roman(level),categoryColor(LegacyEnchant.find(id).orElseThrow().category())));
+        meta.lore(lore); item.setItemMeta(meta);
+    }
     private boolean canApply(Material material, String id) { return LegacyEnchant.find(id).map(type -> type.accepts(material)).orElse(false); }
     private String pretty(String id) { return Arrays.stream(id.split("_")).map(s -> Character.toUpperCase(s.charAt(0))+s.substring(1)).reduce((a,b)->a+" "+b).orElse(id); }
     private String roman(int value) { String[] r={"","I","II","III","IV","V","VI","VII","VIII","IX","X"}; return value>0&&value<r.length?r[value]:String.valueOf(value); }
@@ -541,7 +602,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         if (!sender.hasPermission("velioraenchant.admin")) { sender.sendMessage(Component.text("Command admin. Gunakan /enchants untuk panduan.",NamedTextColor.RED)); return true; }
         if (args.length == 1 && args[0].equalsIgnoreCase("reload")) { reloadConfig(); distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution")); sender.sendMessage(Component.text("VelioraEnchant reloaded.",NamedTextColor.GREEN)); return true; }
         if (args.length == 2 && (args[0].equalsIgnoreCase("rodroll") || args[0].equalsIgnoreCase("fishroll"))) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} target.getInventory().addItem(rollFishingBook()).values().forEach(item->target.getWorld().dropItemNaturally(target.getLocation(),item)); sender.sendMessage(Component.text("Fishing rod enchant book di-roll.",NamedTextColor.GREEN)); return true; }
-        if (args.length == 4 && args[0].equalsIgnoreCase("give")) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} int level; try{level=Integer.parseInt(args[3]);}catch(NumberFormatException e){return false;} String id=args[2].toLowerCase(Locale.ROOT); if(LegacyEnchant.find(id).isEmpty()){sender.sendMessage(Component.text("Enchant tidak dikenal.",NamedTextColor.RED));return true;} level=Math.clamp(level,1,getConfig().getInt("custom-enchants."+id+".max-level",3)); target.getInventory().addItem(createBook(id,level)).values().forEach(i->target.getWorld().dropItemNaturally(target.getLocation(),i)); sender.sendMessage(Component.text("Book diberikan.",NamedTextColor.GREEN));return true; }
+        if (args.length == 4 && args[0].equalsIgnoreCase("give")) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} int level; try{level=Integer.parseInt(args[3]);}catch(NumberFormatException e){return false;} String id=canonicalId(args[2]); if(LegacyEnchant.find(id).isEmpty()){sender.sendMessage(Component.text("Enchant tidak dikenal.",NamedTextColor.RED));return true;} level=Math.clamp(level,1,getConfig().getInt("custom-enchants."+id+".max-level",3)); target.getInventory().addItem(createBook(id,level)).values().forEach(i->target.getWorld().dropItemNaturally(target.getLocation(),i)); sender.sendMessage(Component.text("Book diberikan.",NamedTextColor.GREEN));return true; }
         sender.sendMessage(Component.text("/venchant give <player> <enchant> <level> | /venchant rodroll <player> | /venchant reload",NamedTextColor.YELLOW)); return true;
     }
     private void sendMemberGuide(CommandSender sender) {
