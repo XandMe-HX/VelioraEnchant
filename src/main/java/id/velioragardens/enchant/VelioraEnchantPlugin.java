@@ -48,7 +48,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private boolean excellentEnchantsPresent;
     private DistributionPolicy distributionPolicy;
     private NamespacedKey villagerTradeMarkerKey;
-    private static final Component FISHING_MENU_TITLE=Component.text("✦ Veliora Fishing Enchants",NamedTextColor.AQUA);
+    private static final Component FISHING_MENU_TITLE=Component.text("Veliora Fishing Enchants",NamedTextColor.AQUA);
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -61,6 +61,12 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             getConfig().addDefault(path + ".cooldown-ticks", -1);
         }
         getConfig().options().copyDefaults(true);
+        if (getConfig().getInt("config-version",1) < 2) {
+            getConfig().set("distribution.structure-loot.enabled",true);
+            getConfig().set("distribution.librarian.enabled",true);
+            getConfig().set("distribution.fisherman.enabled",true);
+            getConfig().set("config-version",2);
+        }
         saveConfig();
         distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution"));
         customKey = new NamespacedKey(this, "custom_enchant");
@@ -103,7 +109,10 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             int target = Math.min(cap(entry.getKey(), enchant.getMaxLevel()), a == b ? a + 1 : Math.max(a, b));
             if (target > enchantLevel(edited, enchant)) { setEnchant(edited, enchant, target); changed = true; }
         }
-        if (changed) event.setResult(edited);
+        if (changed) {
+            if (event.getView().getRepairCost() < 1) event.getView().setRepairCost(1);
+            event.setResult(edited);
+        }
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -524,12 +533,25 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private String roman(int value) { String[] r={"","I","II","III","IV","V","VI","VII","VIII","IX","X"}; return value>0&&value<r.length?r[value]:String.valueOf(value); }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (args.length == 1 && args[0].equalsIgnoreCase("menu") && sender instanceof Player player) { openFishingMenu(player); return true; }
+        if (args.length == 0 || args[0].equalsIgnoreCase("help") || args[0].equalsIgnoreCase("guide")) { sendMemberGuide(sender); return true; }
+        if (args.length == 1 && args[0].equalsIgnoreCase("menu") && sender instanceof Player player) {
+            if (!player.hasPermission("velioraenchant.use")) { player.sendMessage(Component.text("Kamu tidak memiliki izin.",NamedTextColor.RED)); return true; }
+            openFishingMenu(player); return true;
+        }
+        if (!sender.hasPermission("velioraenchant.admin")) { sender.sendMessage(Component.text("Command admin. Gunakan /enchants untuk panduan.",NamedTextColor.RED)); return true; }
         if (args.length == 1 && args[0].equalsIgnoreCase("reload")) { reloadConfig(); distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution")); sender.sendMessage(Component.text("VelioraEnchant reloaded.",NamedTextColor.GREEN)); return true; }
         if (args.length == 2 && (args[0].equalsIgnoreCase("rodroll") || args[0].equalsIgnoreCase("fishroll"))) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} target.getInventory().addItem(rollFishingBook()).values().forEach(item->target.getWorld().dropItemNaturally(target.getLocation(),item)); sender.sendMessage(Component.text("Fishing rod enchant book di-roll.",NamedTextColor.GREEN)); return true; }
         if (args.length == 4 && args[0].equalsIgnoreCase("give")) { Player target=Bukkit.getPlayerExact(args[1]); if(target==null){sender.sendMessage(Component.text("Player tidak online.",NamedTextColor.RED));return true;} int level; try{level=Integer.parseInt(args[3]);}catch(NumberFormatException e){return false;} String id=args[2].toLowerCase(Locale.ROOT); if(LegacyEnchant.find(id).isEmpty()){sender.sendMessage(Component.text("Enchant tidak dikenal.",NamedTextColor.RED));return true;} level=Math.clamp(level,1,getConfig().getInt("custom-enchants."+id+".max-level",3)); target.getInventory().addItem(createBook(id,level)).values().forEach(i->target.getWorld().dropItemNaturally(target.getLocation(),i)); sender.sendMessage(Component.text("Book diberikan.",NamedTextColor.GREEN));return true; }
-        sender.sendMessage(Component.text("/venchant give <player> <enchant> <level> | /venchant reload",NamedTextColor.YELLOW)); return true;
+        sender.sendMessage(Component.text("/venchant give <player> <enchant> <level> | /venchant rodroll <player> | /venchant reload",NamedTextColor.YELLOW)); return true;
     }
-    @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) { if(args.length==1)return List.of("give","reload","rodroll","menu"); if(args.length==2&&(args[0].equalsIgnoreCase("give")||args[0].equalsIgnoreCase("rodroll")))return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(); if(args.length==3)return LegacyEnchant.ids(); return List.of(); }
+    private void sendMemberGuide(CommandSender sender) {
+        sender.sendMessage(Component.text("Veliora Custom Enchant",NamedTextColor.AQUA));
+        sender.sendMessage(Component.text("Dapatkan buku dari loot structure, Librarian, Fisherman, atau hadiah server.",NamedTextColor.GRAY));
+        sender.sendMessage(Component.text("Cara pakai: taruh equipment di slot kiri anvil dan buku custom di slot kanan.",NamedTextColor.WHITE));
+        sender.sendMessage(Component.text("Buku hanya bisa dipasang pada jenis item yang tertulis di tooltip.",NamedTextColor.YELLOW));
+        sender.sendMessage(Component.text("Gabungkan dua level sama untuk menaikkan level, contoh I + I menjadi II.",NamedTextColor.GREEN));
+        sender.sendMessage(Component.text("Gunakan /enchants menu untuk melihat katalog enchant fishing.",NamedTextColor.AQUA));
+    }
+    @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) { if(args.length==1)return sender.hasPermission("velioraenchant.admin")?List.of("help","menu","give","reload","rodroll"):List.of("help","menu"); if(args.length==2&&sender.hasPermission("velioraenchant.admin")&&(args[0].equalsIgnoreCase("give")||args[0].equalsIgnoreCase("rodroll")))return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(); if(args.length==3&&sender.hasPermission("velioraenchant.admin")&&args[0].equalsIgnoreCase("give"))return LegacyEnchant.ids(); return List.of(); }
     private static final class FishingMenuHolder implements InventoryHolder { @Override public Inventory getInventory() { return null; } }
 }

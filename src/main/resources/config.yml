@@ -1,5 +1,7 @@
-# VelioraEnchant 1.0.0 - Paper 1.21.8+
+# VelioraEnchant 1.0.1 - Paper 1.21.8+
 # Old V1 names retained as safe enchant books; V2's high-level vanilla system is included too.
+config-version: 2
+
 overlevel:
   enabled: true
   bypass-too-expensive: true
@@ -42,10 +44,10 @@ fishing:
     treasure-chance: { Base: 0.03, Per_Level: 0.02, Capacity: 0.10, Action: ADD }
     heal: { Base: 2.0, Per_Level: 1.0, Capacity: 6.0, Action: ADD }
 
-# Distribution is disabled by default until each source is reviewed.
+# Safe member progression. Chances stay intentionally low to protect the economy.
 distribution:
   structure-loot:
-    enabled: false
+    enabled: true
     chance: 0.0075 # 0.75% per eligible generated container
     rarity-cap: EPIC
     allowed-tables:
@@ -56,13 +58,13 @@ distribution:
       - minecraft:chests/ancient_city
       - minecraft:chests/bastion_treasure
   librarian:
-    enabled: false
+    enabled: true
     chance: 0.30
     rarity-cap: EPIC
     expert-price: 32
     master-price: 48
   fisherman:
-    enabled: false
+    enabled: true
     chance: 0.30
     rarity-cap: EPIC
     master-price: 32
