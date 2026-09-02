@@ -416,8 +416,11 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private String canonicalId(String id) { return LegacyEnchant.find(id).map(LegacyEnchant::id).orElse(id.toLowerCase(Locale.ROOT)); }
     private void migrateLegacyId(String oldId, String newId) {
         String oldPath="custom-enchants."+oldId, newPath="custom-enchants."+newId;
-        if (getConfig().isConfigurationSection(oldPath)) {
-            if (!getConfig().isConfigurationSection(newPath)) getConfig().set(newPath,getConfig().getConfigurationSection(oldPath).getValues(true));
+        if (getConfig().contains(oldPath,true) && getConfig().isConfigurationSection(oldPath)) {
+            for (Map.Entry<String,Object> entry:getConfig().getConfigurationSection(oldPath).getValues(true).entrySet()) {
+                String destination=newPath+"."+entry.getKey();
+                if (!getConfig().contains(destination,true)) getConfig().set(destination,entry.getValue());
+            }
             getConfig().set(oldPath,null);
         }
     }
