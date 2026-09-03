@@ -18,6 +18,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
 import org.bukkit.event.enchantment.EnchantItemEvent;
+import org.bukkit.event.enchantment.PrepareItemEnchantEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
@@ -44,6 +45,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private final Map<String, Long> cooldowns = new ConcurrentHashMap<>();
     private final Map<UUID, Long> windUntil = new ConcurrentHashMap<>();
     private final Map<UUID, Long> repairReady = new ConcurrentHashMap<>();
+    private final Map<UUID, EnchantingContext> enchantingContexts = new ConcurrentHashMap<>();
     private final Set<Location> veinBreaking = ConcurrentHashMap.newKeySet();
     private final Map<String, Enchantment> overlevel = new LinkedHashMap<>();
     private boolean excellentEnchantsPresent;
@@ -70,7 +72,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         }
         migrateLegacyId("lifesteal", "life_steal");
         migrateLegacyId("autosmelt", "auto_smelt");
-        getConfig().set("config-version",3);
+        getConfig().set("config-version",4);
         saveConfig();
         distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution"));
         customKey = new NamespacedKey(this, "custom_enchant");
@@ -90,7 +92,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         if (excellentEnchantsPresent && getConfig().getBoolean("excellent-enchants-bridge.enabled", true)) getLogger().info("ExcellentEnchants detected: duplicate Veliora effects will be suppressed per item.");
         getLogger().info("Fishing rod enchant engine enabled" + (suitePresent ? " with optional VelioraSuite hook available." : " without VelioraSuite dependency."));
     }
-    @Override public void onDisable() { cooldowns.clear(); windUntil.clear(); repairReady.clear(); veinBreaking.clear(); }
+    @Override public void onDisable() { cooldowns.clear(); windUntil.clear(); repairReady.clear(); enchantingContexts.clear(); veinBreaking.clear(); }
 
     @EventHandler(ignoreCancelled = true)
     public void onAnvil(PrepareAnvilEvent event) {
@@ -120,20 +122,67 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     }
 
     @EventHandler(ignoreCancelled = true)
+    public void onPrepareEnchant(PrepareItemEnchantEvent event) {
+        enchantingContexts.put(event.getEnchanter().getUniqueId(), new EnchantingContext(Math.clamp(event.getEnchantmentBonus(), 0, 15), System.currentTimeMillis()));
+    }
+
+    @EventHandler(ignoreCancelled = true)
     public void onEnchantingTable(EnchantItemEvent event) {
         if (!getConfig().getBoolean("distribution.enchanting-table.enabled", true)) return;
         if (event.getExpLevelCost() < getConfig().getInt("distribution.enchanting-table.minimum-level-cost", 15)) return;
-        if (Math.random() >= getConfig().getDouble("distribution.enchanting-table.chance", .12)) return;
+        EnchantingContext context = enchantingContexts.get(event.getEnchanter().getUniqueId());
+        int shelves = context != null && System.currentTimeMillis() - context.createdAt() <= 10_000L ? context.bookshelves() : Math.clamp(event.getExpLevelCost() / 2, 0, 15);
+        int slot = Math.clamp(event.whichButton(), 0, 2);
+        List<Double> multipliers = getConfig().getDoubleList("distribution.enchanting-table.slot-multipliers");
+        double slotMultiplier = multipliers.size() > slot ? multipliers.get(slot) : new double[]{.45D,.70D,1.0D}[slot];
+        double chance = (getConfig().getDouble("distribution.enchanting-table.base-chance", .08D)
+            + shelves * getConfig().getDouble("distribution.enchanting-table.chance-per-bookshelf", .012D)) * slotMultiplier;
+        if (getRandom().nextDouble() >= Math.clamp(chance, 0D, .80D)) return;
         Material material = event.getItem().getType();
-        List<LegacyEnchant> candidates = Arrays.stream(LegacyEnchant.values())
+        List<LegacyEnchant> candidates = new ArrayList<>(Arrays.stream(LegacyEnchant.values())
             .filter(enchant -> enabled(enchant.id()))
             .filter(enchant -> material == Material.BOOK || material == Material.ENCHANTED_BOOK || enchant.accepts(material))
-            .toList();
+            .filter(enchant -> enchant.category() != LegacyEnchant.Category.FISHING_ROD || material == Material.FISHING_ROD)
+            .filter(enchant -> customLevel(event.getItem(), enchant.id()) == 0)
+            .toList());
         if (candidates.isEmpty()) return;
-        LegacyEnchant enchant = candidates.get(getRandom().nextInt(candidates.size()));
-        int level = Math.min(defaultMaxLevel(enchant), Math.max(1, event.getExpLevelCost() / 15));
-        applyCustomEnchant(event.getItem(), enchant.id(), level);
-        event.getEnchanter().sendActionBar(Component.text("Custom enchant didapat: " + pretty(enchant.id()) + " " + roman(level), categoryColor(enchant.category())));
+        int modifiedPower = modifiedEnchantingPower(event.getExpLevelCost(), enchantability(material));
+        int maximum = Math.max(1, Math.min(3, getConfig().getInt("distribution.enchanting-table.maximum-custom-enchants", 3)));
+        int count = 1, continuation = modifiedPower;
+        while (count < maximum && getRandom().nextInt(50) <= continuation) { count++; continuation /= 2; }
+        Collections.shuffle(candidates, getRandom());
+        List<String> received = new ArrayList<>();
+        for (LegacyEnchant enchant : candidates) {
+            if (received.size() >= count || received.stream().map(LegacyEnchant::find).flatMap(Optional::stream).anyMatch(existing -> conflicts(existing, enchant))) continue;
+            int configuredMax = Math.max(1, getConfig().getInt("custom-enchants." + enchant.id() + ".max-level", defaultMaxLevel(enchant)));
+            int level = Math.min(configuredMax, Math.max(1, 1 + modifiedPower / 15));
+            if (level > 1 && getRandom().nextDouble() < .35D) level--;
+            applyCustomEnchant(event.getItem(), enchant.id(), level);
+            received.add(enchant.id());
+        }
+        if (!received.isEmpty()) event.getEnchanter().sendActionBar(Component.text("Custom enchant: " + received.stream().map(id -> pretty(id) + " " + roman(rawCustomLevel(event.getItem(), id))).reduce((a,b) -> a + ", " + b).orElse(""), NamedTextColor.LIGHT_PURPLE));
+    }
+
+    private int modifiedEnchantingPower(int cost, int enchantability) {
+        int bound = Math.max(1, enchantability / 4 + 1);
+        int base = Math.max(1, cost + getRandom().nextInt(bound) + getRandom().nextInt(bound) + 1);
+        double variance = (getRandom().nextDouble() + getRandom().nextDouble() - 1D) * .15D;
+        return Math.max(1, (int)Math.round(base * (1D + variance)));
+    }
+    private int enchantability(Material material) {
+        String name = material.name();
+        if (name.startsWith("GOLDEN_")) return 22;
+        if (name.startsWith("WOODEN_") || name.startsWith("LEATHER_") || name.startsWith("NETHERITE_")) return 15;
+        if (name.startsWith("CHAINMAIL_")) return 12;
+        if (name.startsWith("DIAMOND_")) return 10;
+        if (name.startsWith("IRON_")) return name.matches("IRON_(HELMET|CHESTPLATE|LEGGINGS|BOOTS)") ? 9 : 14;
+        if (name.startsWith("STONE_")) return 5;
+        return material == Material.TURTLE_HELMET ? 9 : 1;
+    }
+    private boolean conflicts(LegacyEnchant first, LegacyEnchant second) {
+        Set<String> healing = Set.of("life_steal","omnivamp","soul_eater");
+        Set<String> lethalSave = Set.of("phoenix","second_life","death_angel");
+        return (healing.contains(first.id()) && healing.contains(second.id())) || (lethalSave.contains(first.id()) && lethalSave.contains(second.id()));
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -568,20 +617,38 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             if(merged<=current)return false;
             ItemStack book=createBook(id,merged); result.setType(book.getType()); result.setItemMeta(book.getItemMeta()); return true;
         }
-        if (!canApply(left.getType(), id)) return false;
-        int incoming = customLevel(right, id); if (incoming < 1) return false;
-        int current=customLevel(left,id);
-        int merged = Math.min(getConfig().getInt("custom-enchants." + id + ".max-level", 3), incoming == current ? current + 1 : Math.max(incoming, current));
-        if (merged <= current) return false;
         ItemMeta meta = result.getItemMeta(); if (meta == null) return false;
-        meta.getPersistentDataContainer().set(customKey(id), PersistentDataType.INTEGER, merged);
         List<Component> lore = new ArrayList<>(Optional.ofNullable(meta.lore()).orElse(List.of()));
-        lore.removeIf(line -> {
-            String plain=PlainTextComponentSerializer.plainText().serialize(line);
-            return plain.startsWith("✦ " + pretty(id)) || plain.startsWith(pretty(id) + " ");
-        });
-        lore.add(Component.text(pretty(id) + " " + roman(merged), NamedTextColor.AQUA));
+        boolean changed = false;
+        for (String bookId : customBookIds(right)) {
+            if (!canApply(left.getType(), bookId)) continue;
+            int incoming = rawCustomLevel(right, bookId); if (incoming < 1) continue;
+            int current = rawCustomLevel(left, bookId);
+            int merged = Math.min(getConfig().getInt("custom-enchants." + bookId + ".max-level", 3), incoming == current ? current + 1 : Math.max(incoming, current));
+            if (merged <= current) continue;
+            meta.getPersistentDataContainer().set(customKey(bookId), PersistentDataType.INTEGER, merged);
+            String title = pretty(bookId);
+            lore.removeIf(line -> PlainTextComponentSerializer.plainText().serialize(line).startsWith(title + " "));
+            lore.add(Component.text(title + " " + roman(merged), categoryColor(LegacyEnchant.find(bookId).orElseThrow().category())));
+            changed = true;
+        }
+        if (!changed) return false;
         meta.lore(lore); result.setItemMeta(meta); return true;
+    }
+    private List<String> customBookIds(ItemStack book) {
+        if (book == null || book.getItemMeta() == null) return List.of();
+        Set<String> ids = new LinkedHashSet<>();
+        String primary = book.getItemMeta().getPersistentDataContainer().get(customKey, PersistentDataType.STRING);
+        if (primary != null && LegacyEnchant.find(primary).isPresent()) ids.add(canonicalId(primary));
+        for (NamespacedKey key : book.getItemMeta().getPersistentDataContainer().getKeys()) {
+            if (!key.getNamespace().equalsIgnoreCase(getName().toLowerCase(Locale.ROOT)) || !key.getKey().startsWith("ce_")) continue;
+            String keyId = canonicalId(key.getKey().substring(3));
+            if (LegacyEnchant.find(keyId).isPresent()) ids.add(keyId);
+        }
+        return List.copyOf(ids);
+    }
+    private int rawCustomLevel(ItemStack item, String id) {
+        return item == null || item.getItemMeta() == null ? 0 : item.getItemMeta().getPersistentDataContainer().getOrDefault(customKey(canonicalId(id)), PersistentDataType.INTEGER, 0);
     }
     private void applyCustomEnchant(ItemStack item,String id,int level) {
         id=canonicalId(id); ItemMeta meta=item.getItemMeta(); if(meta==null)return;
@@ -618,4 +685,5 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) { if(args.length==1)return sender.hasPermission("velioraenchant.admin")?List.of("help","menu","give","reload","rodroll"):List.of("help","menu"); if(args.length==2&&sender.hasPermission("velioraenchant.admin")&&(args[0].equalsIgnoreCase("give")||args[0].equalsIgnoreCase("rodroll")))return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(); if(args.length==3&&sender.hasPermission("velioraenchant.admin")&&args[0].equalsIgnoreCase("give"))return LegacyEnchant.ids(); return List.of(); }
     private static final class FishingMenuHolder implements InventoryHolder { @Override public Inventory getInventory() { return null; } }
+    private record EnchantingContext(int bookshelves, long createdAt) {}
 }
