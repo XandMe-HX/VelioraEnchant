@@ -72,6 +72,12 @@ distribution:
     chance-per-bookshelf: 0.012
     slot-multipliers: [0.45, 0.70, 1.00]
     maximum-custom-enchants: 2
+    # Pilihan ketiga dengan biaya level 30 dan 15 bookshelf selalu memberi
+    # sedikitnya satu custom enchant yang kompatibel. Roll kedua tetap mengikuti
+    # mekanik power vanilla agar hasil bagus tidak menjadi terlalu mudah.
+    guaranteed-level-cost: 30
+    guaranteed-bookshelves: 15
+    full-power-minimum-custom-enchants: 1
   structure-loot:
     enabled: true
     chance: 0.0075 # 0.75% per eligible generated container

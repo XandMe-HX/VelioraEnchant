@@ -198,7 +198,10 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         double slotMultiplier = multipliers.size() > slot ? multipliers.get(slot) : new double[]{.45D,.70D,1.0D}[slot];
         double chance = (getConfig().getDouble("distribution.enchanting-table.base-chance", .08D)
             + shelves * getConfig().getDouble("distribution.enchanting-table.chance-per-bookshelf", .012D)) * slotMultiplier;
-        if (getRandom().nextDouble() >= Math.clamp(chance, 0D, .80D)) return;
+        boolean fullPower = event.getExpLevelCost() >= getConfig().getInt("distribution.enchanting-table.guaranteed-level-cost", 30)
+                && shelves >= getConfig().getInt("distribution.enchanting-table.guaranteed-bookshelves", 15)
+                && slot == 2;
+        if (!fullPower && getRandom().nextDouble() >= Math.clamp(chance, 0D, .80D)) return;
         Material material = event.getItem().getType();
         List<LegacyEnchant> candidates = new ArrayList<>(Arrays.stream(LegacyEnchant.values())
             .filter(enchant -> enabled(enchant.id()))
@@ -209,7 +212,9 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         if (candidates.isEmpty()) return;
         int modifiedPower = modifiedEnchantingPower(event.getExpLevelCost(), enchantability(material));
         int maximum = Math.max(1, Math.min(3, getConfig().getInt("distribution.enchanting-table.maximum-custom-enchants", 3)));
-        int count = 1, continuation = modifiedPower;
+        int count = fullPower ? Math.max(1, Math.min(maximum,
+                getConfig().getInt("distribution.enchanting-table.full-power-minimum-custom-enchants", 1))) : 1;
+        int continuation = modifiedPower;
         while (count < maximum && getRandom().nextInt(50) <= continuation) { count++; continuation /= 2; }
         List<String> received = new ArrayList<>();
         while (!candidates.isEmpty() && received.size() < count) {
@@ -218,7 +223,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             if (received.stream().map(LegacyEnchant::find).flatMap(Optional::stream).anyMatch(existing -> conflicts(existing, enchant))) continue;
             int configuredMax = Math.max(1, getConfig().getInt("custom-enchants." + enchant.id() + ".max-level", defaultMaxLevel(enchant)));
             int level = Math.min(configuredMax, Math.max(1, 1 + modifiedPower / 15));
-            if (level > 1 && getRandom().nextDouble() < .35D) level--;
+            if (!fullPower && level > 1 && getRandom().nextDouble() < .35D) level--;
             applyCustomEnchant(event.getItem(), enchant.id(), level);
             received.add(enchant.id());
         }
