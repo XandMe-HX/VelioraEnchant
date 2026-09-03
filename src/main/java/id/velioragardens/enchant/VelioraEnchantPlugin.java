@@ -57,6 +57,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        int previousConfigVersion = getConfig().getInt("config-version", 1);
         excellentEnchantsPresent = getServer().getPluginManager().isPluginEnabled("ExcellentEnchants");
         boolean suitePresent = getServer().getPluginManager().isPluginEnabled("VelioraSuite");
         for (LegacyEnchant enchant : LegacyEnchant.values()) {
@@ -66,7 +67,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             getConfig().addDefault(path + ".cooldown-ticks", -1);
         }
         getConfig().options().copyDefaults(true);
-        if (getConfig().getInt("config-version",1) < 2) {
+        if (previousConfigVersion < 2) {
             getConfig().set("distribution.structure-loot.enabled",true);
             getConfig().set("distribution.librarian.enabled",true);
             getConfig().set("distribution.fisherman.enabled",true);
@@ -74,6 +75,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         }
         migrateLegacyId("lifesteal", "life_steal");
         migrateLegacyId("autosmelt", "auto_smelt");
+        if (previousConfigVersion < 5) migrateSafeOverlevelDefaults();
         getConfig().set("config-version",5);
         saveConfig();
         distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution"));
@@ -108,6 +110,21 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         getServer().getScheduler().runTaskTimer(this, this::applyPassiveEffects, 200L, 200L);
         if (excellentEnchantsPresent && getConfig().getBoolean("excellent-enchants-bridge.enabled", true)) getLogger().info("ExcellentEnchants detected: duplicate Veliora effects will be suppressed per item.");
         getLogger().info("Fishing rod enchant engine enabled" + (suitePresent ? " with optional VelioraSuite hook available." : " without VelioraSuite dependency."));
+    }
+    private void migrateSafeOverlevelDefaults() {
+        Map<String,Integer> caps = new LinkedHashMap<>();
+        caps.put("sharpness",7); caps.put("smite",8); caps.put("bane_of_arthropods",8); caps.put("efficiency",7);
+        caps.put("power",7); caps.put("punch",3); caps.put("impaling",8); caps.put("loyalty",5); caps.put("riptide",4);
+        caps.put("piercing",6); caps.put("quick_charge",4); caps.put("protection",6); caps.put("fire_protection",7);
+        caps.put("blast_protection",7); caps.put("projectile_protection",7); caps.put("feather_falling",6);
+        caps.put("respiration",5); caps.put("thorns",5); caps.put("unbreaking",5); caps.put("mending",2);
+        caps.put("density",7); caps.put("breach",5); caps.put("wind_burst",4);
+        getConfig().set("overlevel.caps", null);
+        caps.forEach((id, level) -> getConfig().set("overlevel.caps." + id, level));
+        getConfig().set("overlevel.anvil-base-cost",25);
+        getConfig().set("overlevel.anvil-cost-per-extra-level",15);
+        getConfig().set("overlevel.mending-two-repair-multiplier",1.5D);
+        getConfig().set("distribution.enchanting-table.maximum-custom-enchants",2);
     }
     @Override public void onDisable() { cooldowns.clear(); windUntil.clear(); repairReady.clear(); enchantingContexts.clear(); veinBreaking.clear(); }
 
