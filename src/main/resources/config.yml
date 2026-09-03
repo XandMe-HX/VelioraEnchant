@@ -1,19 +1,37 @@
 # VelioraEnchant 1.1.0 - Paper 1.21.8+
 # Old V1 names retained as safe enchant books; V2's high-level vanilla system is included too.
-config-version: 4
+config-version: 5
 
 overlevel:
   enabled: true
   bypass-too-expensive: true
+  anvil-base-cost: 25
+  anvil-cost-per-extra-level: 15
+  mending-two-repair-multiplier: 1.5
   caps:
-    sharpness: 10
-    impaling: 10
-    protection: 10
-    fire_protection: 10
-    blast_protection: 10
-    projectile_protection: 10
-    thorns: 8
-    density: 8
+    sharpness: 7
+    smite: 8
+    bane_of_arthropods: 8
+    efficiency: 7
+    power: 7
+    punch: 3
+    impaling: 8
+    loyalty: 5
+    riptide: 4
+    piercing: 6
+    quick_charge: 4
+    protection: 6
+    fire_protection: 7
+    blast_protection: 7
+    projectile_protection: 7
+    feather_falling: 6
+    respiration: 5
+    thorns: 5
+    unbreaking: 5
+    mending: 2
+    density: 7
+    breach: 5
+    wind_burst: 4
 
 # Optional: only has an effect when ExcellentEnchants is installed.
 # If matching Excellent enchant is on the same item, Veliora's duplicate effect is not applied.
@@ -53,7 +71,7 @@ distribution:
     base-chance: 0.08
     chance-per-bookshelf: 0.012
     slot-multipliers: [0.45, 0.70, 1.00]
-    maximum-custom-enchants: 3
+    maximum-custom-enchants: 2
   structure-loot:
     enabled: true
     chance: 0.0075 # 0.75% per eligible generated container
