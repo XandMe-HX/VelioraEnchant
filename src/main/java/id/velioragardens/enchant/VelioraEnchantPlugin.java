@@ -17,10 +17,12 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
+import org.bukkit.event.inventory.PrepareGrindstoneEvent;
 import org.bukkit.event.enchantment.EnchantItemEvent;
 import org.bukkit.event.enchantment.PrepareItemEnchantEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
+import org.bukkit.event.player.PlayerItemMendEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerFishEvent;
@@ -55,6 +57,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        int previousConfigVersion = getConfig().getInt("config-version", 1);
         excellentEnchantsPresent = getServer().getPluginManager().isPluginEnabled("ExcellentEnchants");
         boolean suitePresent = getServer().getPluginManager().isPluginEnabled("VelioraSuite");
         for (LegacyEnchant enchant : LegacyEnchant.values()) {
@@ -64,7 +67,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             getConfig().addDefault(path + ".cooldown-ticks", -1);
         }
         getConfig().options().copyDefaults(true);
-        if (getConfig().getInt("config-version",1) < 2) {
+        if (previousConfigVersion < 2) {
             getConfig().set("distribution.structure-loot.enabled",true);
             getConfig().set("distribution.librarian.enabled",true);
             getConfig().set("distribution.fisherman.enabled",true);
@@ -72,25 +75,56 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         }
         migrateLegacyId("lifesteal", "life_steal");
         migrateLegacyId("autosmelt", "auto_smelt");
-        getConfig().set("config-version",4);
+        if (previousConfigVersion < 5) migrateSafeOverlevelDefaults();
+        getConfig().set("config-version",5);
         saveConfig();
         distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution"));
         customKey = new NamespacedKey(this, "custom_enchant");
         villagerTradeMarkerKey = new NamespacedKey(this,"custom_trade_added");
         overlevel.put("sharpness", Enchantment.SHARPNESS);
+        overlevel.put("smite", Enchantment.SMITE);
+        overlevel.put("bane_of_arthropods", Enchantment.BANE_OF_ARTHROPODS);
+        overlevel.put("efficiency", Enchantment.EFFICIENCY);
+        overlevel.put("power", Enchantment.POWER);
+        overlevel.put("punch", Enchantment.PUNCH);
         overlevel.put("impaling", Enchantment.IMPALING);
+        overlevel.put("loyalty", Enchantment.LOYALTY);
+        overlevel.put("riptide", Enchantment.RIPTIDE);
+        overlevel.put("piercing", Enchantment.PIERCING);
+        overlevel.put("quick_charge", Enchantment.QUICK_CHARGE);
         overlevel.put("protection", Enchantment.PROTECTION);
         overlevel.put("fire_protection", Enchantment.FIRE_PROTECTION);
         overlevel.put("blast_protection", Enchantment.BLAST_PROTECTION);
         overlevel.put("projectile_protection", Enchantment.PROJECTILE_PROTECTION);
         overlevel.put("thorns", Enchantment.THORNS);
+        overlevel.put("feather_falling", Enchantment.FEATHER_FALLING);
+        overlevel.put("respiration", Enchantment.RESPIRATION);
+        overlevel.put("unbreaking", Enchantment.UNBREAKING);
+        overlevel.put("mending", Enchantment.MENDING);
         overlevel.put("density", Enchantment.DENSITY);
+        overlevel.put("breach", Enchantment.BREACH);
+        overlevel.put("wind_burst", Enchantment.WIND_BURST);
         getServer().getPluginManager().registerEvents(this, this);
         Objects.requireNonNull(getCommand("velioraenchant")).setExecutor(this);
         Objects.requireNonNull(getCommand("velioraenchant")).setTabCompleter(this);
         getServer().getScheduler().runTaskTimer(this, this::applyPassiveEffects, 200L, 200L);
         if (excellentEnchantsPresent && getConfig().getBoolean("excellent-enchants-bridge.enabled", true)) getLogger().info("ExcellentEnchants detected: duplicate Veliora effects will be suppressed per item.");
         getLogger().info("Fishing rod enchant engine enabled" + (suitePresent ? " with optional VelioraSuite hook available." : " without VelioraSuite dependency."));
+    }
+    private void migrateSafeOverlevelDefaults() {
+        Map<String,Integer> caps = new LinkedHashMap<>();
+        caps.put("sharpness",7); caps.put("smite",8); caps.put("bane_of_arthropods",8); caps.put("efficiency",7);
+        caps.put("power",7); caps.put("punch",3); caps.put("impaling",8); caps.put("loyalty",5); caps.put("riptide",4);
+        caps.put("piercing",6); caps.put("quick_charge",4); caps.put("protection",6); caps.put("fire_protection",7);
+        caps.put("blast_protection",7); caps.put("projectile_protection",7); caps.put("feather_falling",6);
+        caps.put("respiration",5); caps.put("thorns",5); caps.put("unbreaking",5); caps.put("mending",2);
+        caps.put("density",7); caps.put("breach",5); caps.put("wind_burst",4);
+        getConfig().set("overlevel.caps", null);
+        caps.forEach((id, level) -> getConfig().set("overlevel.caps." + id, level));
+        getConfig().set("overlevel.anvil-base-cost",25);
+        getConfig().set("overlevel.anvil-cost-per-extra-level",15);
+        getConfig().set("overlevel.mending-two-repair-multiplier",1.5D);
+        getConfig().set("distribution.enchanting-table.maximum-custom-enchants",2);
     }
     @Override public void onDisable() { cooldowns.clear(); windUntil.clear(); repairReady.clear(); enchantingContexts.clear(); veinBreaking.clear(); }
 
@@ -107,18 +141,45 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             event.getView().bypassEnchantmentLevelRestriction(true);
             if (getConfig().getBoolean("overlevel.bypass-too-expensive", true)) event.getView().setMaximumRepairCost(Integer.MAX_VALUE);
         }
-        ItemStack edited = result.clone(); boolean changed = applyCustomBook(left, right, edited);
+        ItemStack edited = result.clone(); boolean changed = applyCustomBook(left, right, edited); int highestExtraLevel = 0;
         for (var entry : getConfig().getBoolean("overlevel.enabled", true) ? overlevel.entrySet() : Collections.<Map.Entry<String, Enchantment>>emptySet()) {
             Enchantment enchant = entry.getValue();
             int a = enchantLevel(left, enchant), b = enchantLevel(right, enchant);
             if (a == 0 && b == 0) continue;
             int target = Math.min(cap(entry.getKey(), enchant.getMaxLevel()), a == b ? a + 1 : Math.max(a, b));
             if (target > enchantLevel(edited, enchant)) { setEnchant(edited, enchant, target); changed = true; }
+            highestExtraLevel = Math.max(highestExtraLevel, Math.max(0, target - enchant.getMaxLevel()));
         }
         if (changed) {
-            if (event.getView().getRepairCost() < 1) event.getView().setRepairCost(1);
+            int extraCost = highestExtraLevel <= 0 ? 1 : getConfig().getInt("overlevel.anvil-base-cost", 25) + (highestExtraLevel - 1) * getConfig().getInt("overlevel.anvil-cost-per-extra-level", 15);
+            event.getView().setRepairCost(Math.max(event.getView().getRepairCost(), extraCost));
             event.setResult(edited);
         }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onMend(PlayerItemMendEvent event) {
+        int level = event.getItem().getEnchantmentLevel(Enchantment.MENDING);
+        if (level >= 2) event.setRepairAmount(Math.max(event.getRepairAmount(), (int)Math.ceil(event.getRepairAmount() * getConfig().getDouble("overlevel.mending-two-repair-multiplier", 1.5D))));
+    }
+
+    @EventHandler
+    public void onGrindstone(PrepareGrindstoneEvent event) {
+        ItemStack result = event.getResult();
+        if (result == null || result.getItemMeta() == null) return;
+        ItemMeta meta = result.getItemMeta();
+        Set<String> removed = new HashSet<>();
+        for (NamespacedKey key : new HashSet<>(meta.getPersistentDataContainer().getKeys())) {
+            if (!key.getNamespace().equalsIgnoreCase(getName().toLowerCase(Locale.ROOT))) continue;
+            if (key.equals(customKey) || key.getKey().startsWith("ce_")) {
+                if (key.getKey().startsWith("ce_")) removed.add(canonicalId(key.getKey().substring(3)));
+                meta.getPersistentDataContainer().remove(key);
+            }
+        }
+        if (removed.isEmpty()) return;
+        List<Component> lore = new ArrayList<>(Optional.ofNullable(meta.lore()).orElse(List.of()));
+        lore.removeIf(line -> removed.stream().anyMatch(id -> PlainTextComponentSerializer.plainText().serialize(line).startsWith(pretty(id) + " ")));
+        meta.lore(lore); result.setItemMeta(meta); event.setResult(result);
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -150,10 +211,11 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         int maximum = Math.max(1, Math.min(3, getConfig().getInt("distribution.enchanting-table.maximum-custom-enchants", 3)));
         int count = 1, continuation = modifiedPower;
         while (count < maximum && getRandom().nextInt(50) <= continuation) { count++; continuation /= 2; }
-        Collections.shuffle(candidates, getRandom());
         List<String> received = new ArrayList<>();
-        for (LegacyEnchant enchant : candidates) {
-            if (received.size() >= count || received.stream().map(LegacyEnchant::find).flatMap(Optional::stream).anyMatch(existing -> conflicts(existing, enchant))) continue;
+        while (!candidates.isEmpty() && received.size() < count) {
+            LegacyEnchant enchant = weightedTableCandidate(candidates);
+            candidates.remove(enchant);
+            if (received.stream().map(LegacyEnchant::find).flatMap(Optional::stream).anyMatch(existing -> conflicts(existing, enchant))) continue;
             int configuredMax = Math.max(1, getConfig().getInt("custom-enchants." + enchant.id() + ".max-level", defaultMaxLevel(enchant)));
             int level = Math.min(configuredMax, Math.max(1, 1 + modifiedPower / 15));
             if (level > 1 && getRandom().nextDouble() < .35D) level--;
@@ -161,6 +223,21 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             received.add(enchant.id());
         }
         if (!received.isEmpty()) event.getEnchanter().sendActionBar(Component.text("Custom enchant: " + received.stream().map(id -> pretty(id) + " " + roman(rawCustomLevel(event.getItem(), id))).reduce((a,b) -> a + ", " + b).orElse(""), NamedTextColor.LIGHT_PURPLE));
+    }
+
+    private LegacyEnchant weightedTableCandidate(List<LegacyEnchant> candidates) {
+        double total = candidates.stream().mapToDouble(this::tableWeight).sum();
+        double roll = getRandom().nextDouble() * total;
+        for (LegacyEnchant enchant : candidates) { roll -= tableWeight(enchant); if (roll <= 0D) return enchant; }
+        return candidates.getLast();
+    }
+    private double tableWeight(LegacyEnchant enchant) {
+        String id = enchant.id();
+        if (Set.of("phoenix","second_life","death_angel","veliora_secret").contains(id)) return .15D;
+        if (Set.of("life_steal","omnivamp","soul_eater","time_travel","force_shield","storm").contains(id)) return .75D;
+        if (Set.of("lightning","critical","cobweb","hail_storm","grimoire","emergency_defence","obsidian_plate").contains(id)) return 2.5D;
+        if (Set.of("auto_repair","telepathy","auto_smelt","protection","shield_resistance","wind_burst").contains(id)) return 5D;
+        return 12D;
     }
 
     private int modifiedEnchantingPower(int cost, int enchantability) {
