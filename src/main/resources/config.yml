@@ -1,6 +1,6 @@
 # VelioraEnchant 1.1.0 - Paper 1.21.8+
 # Old V1 names retained as safe enchant books; V2's high-level vanilla system is included too.
-config-version: 3
+config-version: 4
 
 overlevel:
   enabled: true
@@ -48,8 +48,12 @@ fishing:
 distribution:
   enchanting-table:
     enabled: true
-    chance: 0.12
     minimum-level-cost: 15
+    # Peluang mengikuti kekuatan meja: base + (bookshelf x bonus), lalu dikalikan slot.
+    base-chance: 0.08
+    chance-per-bookshelf: 0.012
+    slot-multipliers: [0.45, 0.70, 1.00]
+    maximum-custom-enchants: 3
   structure-loot:
     enabled: true
     chance: 0.0075 # 0.75% per eligible generated container
