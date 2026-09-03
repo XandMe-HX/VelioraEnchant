@@ -3,8 +3,6 @@ name: Maven Build
 on:
   push:
     branches: [ main, clean ]
-  pull_request:
-    branches: [ main, clean ]
 
 permissions:
   contents: read
