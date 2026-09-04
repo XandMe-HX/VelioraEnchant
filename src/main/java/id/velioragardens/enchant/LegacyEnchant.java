@@ -6,6 +6,10 @@ import org.bukkit.Material;
 import java.util.*;
 
 enum LegacyEnchant {
+    EMBERGUARD(Category.ARMOR), SOFT_LANDING(Category.ARMOR), TRAILBLAZER(Category.ARMOR), CLEAR_MIND(Category.ARMOR),
+    PURSUIT(Category.WEAPON), CRIPPLING_SHOT(Category.BOW), RECOIL_STEP(Category.BOW), TIDAL_STRIDE(Category.WEAPON),
+    MEASURED_WORK(Category.TOOL), CULTIVATOR(Category.TOOL), GENTLE_SHEAR(Category.TOOL),
+    DEEPWATER_PACT(Category.FISHING_ROD), RELIC_SEEKER(Category.FISHING_ROD), SECRET_WHISPER(Category.FISHING_ROD),
     SECOND_WIND(Category.ARMOR), STEADFAST(Category.ARMOR), RIPOSTE(Category.SHIELD), CAREFUL_HANDS(Category.TOOL), PATIENT_ANGLER(Category.FISHING_ROD),
     ABSORB(Category.ARMOR), ANTI_STUN(Category.ARMOR), AUTO_FARM(Category.TOOL), AUTO_REPAIR(Category.TOOL), AUTO_SMELT(Category.TOOL), AXOLOTL_BUFF(Category.ARMOR),
     BARRIER(Category.ARMOR), BLAST(Category.WEAPON), BLEED(Category.WEAPON), BLIND(Category.WEAPON), BLINDING_ARROW(Category.BOW), BLOCK(Category.ARMOR), BURNING(Category.WEAPON),
@@ -34,6 +38,16 @@ enum LegacyEnchant {
     }
     static List<String> ids() { return Arrays.stream(values()).map(LegacyEnchant::id).toList(); }
     boolean accepts(Material material) {
+        if (this == EMBERGUARD) return material.name().endsWith("_CHESTPLATE");
+        if (this == SOFT_LANDING || this == TRAILBLAZER) return material.name().endsWith("_BOOTS");
+        if (this == CLEAR_MIND) return material.name().endsWith("_HELMET");
+        if (this == PURSUIT) return material.name().endsWith("_SWORD");
+        if (this == CRIPPLING_SHOT) return material == Material.BOW;
+        if (this == RECOIL_STEP) return material == Material.CROSSBOW;
+        if (this == TIDAL_STRIDE) return material == Material.TRIDENT;
+        if (this == CULTIVATOR) return material.name().endsWith("_HOE");
+        if (this == GENTLE_SHEAR) return material == Material.SHEARS;
+        if (this == MEASURED_WORK) return material.name().endsWith("_PICKAXE") || material.name().endsWith("_AXE") || material.name().endsWith("_SHOVEL");
         if (this == SECOND_WIND) return material.name().endsWith("_CHESTPLATE");
         if (this == STEADFAST) return material.name().endsWith("_LEGGINGS");
         return switch (category) {

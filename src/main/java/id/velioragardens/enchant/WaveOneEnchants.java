@@ -138,7 +138,7 @@ final class WaveOneEnchants implements Listener {
     public void fishing(PlayerFishEvent event) {
         Player p = event.getPlayer();
         if (event.getState() == PlayerFishEvent.State.FISHING) {
-            casts.put(p.getUniqueId(), new Cast(event.getHook().getUniqueId(), level(rod(p), "patient_angler"), System.currentTimeMillis()));
+            casts.put(p.getUniqueId(), new Cast(event.getHook().getUniqueId(), level(rod(p), "patient_angler") + level(rod(p), "deepwater_pact") + level(rod(p), "relic_seeker") + level(rod(p), "secret_whisper"), System.currentTimeMillis()));
             return;
         }
         if (event.getState() != PlayerFishEvent.State.CAUGHT_FISH) return;
@@ -152,7 +152,8 @@ final class WaveOneEnchants implements Listener {
         boolean treasure = type == Material.ENCHANTED_BOOK || type == Material.BOW || type == Material.FISHING_ROD
                 || type == Material.NAME_TAG || type == Material.NAUTILUS_SHELL || type == Material.SADDLE;
         // Replace ONE vanilla fish; never duplicate drops. 5% vanilla treasure baseline * max 10% relative bonus.
-        if (ordinaryFish && event.getHook().isInOpenWater() && ThreadLocalRandom.current().nextDouble() < .05 * patienceBonus(p)) {
+        double bonus = Math.min(.20, patienceBonus(p) + plugin.getFishingEnchantBonus(p,"deepwater_pact") + plugin.getFishingEnchantBonus(p,"relic_seeker") + plugin.getFishingEnchantBonus(p,"secret_whisper"));
+        if (ordinaryFish && event.getHook().isInOpenWater() && ThreadLocalRandom.current().nextDouble() < .05 * bonus) {
             Collection<ItemStack> loot = LootTables.FISHING_TREASURE.getLootTable().populateLoot(ThreadLocalRandom.current(),
                     new LootContext.Builder(event.getHook().getLocation()).lootedEntity(event.getHook()).killer(p).luck(0).build());
             if (!loot.isEmpty()) { item.setItemStack(loot.iterator().next().clone()); treasure = true; }
