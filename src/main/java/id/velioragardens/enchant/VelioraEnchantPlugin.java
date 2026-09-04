@@ -44,6 +44,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, TabExecutor {
     private NamespacedKey customKey;
+    private WaveOneEnchants waveOne;
     private final Map<String, Long> cooldowns = new ConcurrentHashMap<>();
     private final Map<UUID, Long> windUntil = new ConcurrentHashMap<>();
     private final Map<UUID, Long> repairReady = new ConcurrentHashMap<>();
@@ -105,6 +106,8 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         overlevel.put("breach", Enchantment.BREACH);
         overlevel.put("wind_burst", Enchantment.WIND_BURST);
         getServer().getPluginManager().registerEvents(this, this);
+        waveOne = new WaveOneEnchants(this);
+        getServer().getPluginManager().registerEvents(waveOne, this);
         Objects.requireNonNull(getCommand("velioraenchant")).setExecutor(this);
         Objects.requireNonNull(getCommand("velioraenchant")).setTabCompleter(this);
         getServer().getScheduler().runTaskTimer(this, this::applyPassiveEffects, 200L, 200L);
@@ -126,7 +129,18 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         getConfig().set("overlevel.mending-two-repair-multiplier",1.5D);
         getConfig().set("distribution.enchanting-table.maximum-custom-enchants",2);
     }
-    @Override public void onDisable() { cooldowns.clear(); windUntil.clear(); repairReady.clear(); enchantingContexts.clear(); veinBreaking.clear(); }
+    @Override public void onDisable() { if (waveOne != null) waveOne.clear(); cooldowns.clear(); windUntil.clear(); repairReady.clear(); enchantingContexts.clear(); veinBreaking.clear(); }
+
+    boolean waveEnabled(String id) { return enabled(id); }
+    int waveLevel(ItemStack item, String id) {
+        LegacyEnchant enchant = LegacyEnchant.find(id).orElseThrow();
+        if (item == null || !enchant.accepts(item.getType()) || !enabled(id)) return 0;
+        int cap = Math.clamp(getConfig().getInt("custom-enchants." + id + ".max-level", defaultMaxLevel(enchant)), 1, defaultMaxLevel(enchant));
+        return Math.clamp(customLevel(item, id), 0, cap);
+    }
+    /** Optional Suite integration: bonus is relative weight, never an extra item or guaranteed rarity. */
+    public double getPatientAnglerBonus(Player player) { return waveOne == null ? 0 : waveOne.patienceBonus(player); }
+    public void recordPatientAnglerCatch(Player player, boolean rare) { if (waveOne != null) waveOne.recordCatch(player, rare); }
 
     @EventHandler(ignoreCancelled = true)
     public void onAnvil(PrepareAnvilEvent event) {
@@ -238,6 +252,9 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     }
     private double tableWeight(LegacyEnchant enchant) {
         String id = enchant.id();
+        if (id.equals("second_wind")) return .75D;
+        if (id.equals("riposte") || id.equals("patient_angler")) return 2.5D;
+        if (id.equals("steadfast") || id.equals("careful_hands")) return 5D;
         if (Set.of("phoenix","second_life","death_angel","veliora_secret").contains(id)) return .15D;
         if (Set.of("life_steal","omnivamp","soul_eater","time_travel","force_shield","storm").contains(id)) return .75D;
         if (Set.of("lightning","critical","cobweb","hail_storm","grimoire","emergency_defence","obsidian_plate").contains(id)) return 2.5D;
@@ -558,6 +575,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private boolean enabled(String id) { return getConfig().getBoolean("custom-enchants." + canonicalId(id) + ".enabled", true); }
     private int defaultMaxLevel(LegacyEnchant enchant) {
         return switch (enchant) {
+            case PATIENT_ANGLER -> 5;
             case AUTO_SMELT, TELEPATHY, AUTO_FARM, PHOENIX, SECOND_LIFE, DEATH_ANGEL -> 1;
             case ABYSSAL_HOOK, LEVIATHAN_LINE, VELIORA_SECRET -> 1;
             case LIFE_STEAL, SHIELD_RESISTANCE -> 5;
@@ -623,9 +641,14 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         List<Component> lore=new ArrayList<>();
         lore.add(Component.text(description(id),NamedTextColor.GRAY));
         lore.add(Component.text("",NamedTextColor.WHITE));
-        lore.add(Component.text("Untuk: "+categoryLabel(enchant.category()),NamedTextColor.DARK_AQUA));
+        String items = id.equals("second_wind") ? "Chestplate" : id.equals("steadfast") ? "Leggings" : categoryLabel(enchant.category());
+        lore.add(Component.text("Untuk: "+items,NamedTextColor.DARK_AQUA));
         lore.add(Component.text("Level: "+roman(level)+" / "+roman(defaultMaxLevel(enchant)),color));
         if(rarity!=null) lore.add(Component.text("Rarity: "+pretty(rarity.id),rarity.color));
+        else if (Set.of("second_wind","steadfast","riposte","careful_hands").contains(id)) {
+            String rarityName = id.equals("second_wind") ? "Legendary" : id.equals("riposte") ? "Epic" : "Rare";
+            lore.add(Component.text("Rarity: " + rarityName, NamedTextColor.GOLD));
+        }
         lore.add(Component.text("",NamedTextColor.WHITE));
         lore.add(Component.text("Gabungkan di anvil dengan item yang sesuai.",NamedTextColor.DARK_GRAY));
         meta.lore(lore); book.setItemMeta(meta); return book;
@@ -634,6 +657,11 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
     private NamedTextColor categoryColor(LegacyEnchant.Category category) { return switch(category) { case WEAPON -> NamedTextColor.RED; case TOOL -> NamedTextColor.GOLD; case ARMOR -> NamedTextColor.AQUA; case BOW -> NamedTextColor.GREEN; case SHIELD -> NamedTextColor.LIGHT_PURPLE; case MACE -> NamedTextColor.DARK_PURPLE; case FISHING_ROD -> NamedTextColor.BLUE; }; }
     private String categoryLabel(LegacyEnchant.Category category) { return switch(category) { case WEAPON -> "Pedang, kapak, mace, atau trident"; case TOOL -> "Pickaxe, kapak, sekop, atau hoe"; case ARMOR -> "Armor atau elytra"; case BOW -> "Bow atau crossbow"; case SHIELD -> "Shield"; case MACE -> "Mace"; case FISHING_ROD -> "Fishing Rod"; }; }
     private String description(String id) { return switch(id) {
+        case "second_wind" -> "Saat HP melewati batas 25%, mendapat Regeneration I selama 3–5 detik. Cooldown 90 detik.";
+        case "steadfast" -> "Saat sneaking, knockback serangan berkurang 10% per level (maksimal 30%).";
+        case "riposte" -> "Block shield berhasil: pukulan penuh berikutnya mendapat +0.5 damage per level selama 4 detik. Cooldown 10 detik.";
+        case "careful_hands" -> "Melindungi sisa 1–3 durability alat. Perbaiki alat untuk melanjutkan pemakaian.";
+        case "patient_angler" -> "Setelah 5 tangkapan tanpa hasil langka, peluang langka meningkat bertahap (maksimal +10% relatif), lalu reset saat berhasil.";
         case "life_steal" -> "Serangan memulihkan sedikit health.";
         case "bleed" -> "Memberi efek wither singkat pada target.";
         case "poison" -> "Memberi racun singkat pada target.";

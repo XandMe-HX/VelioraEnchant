@@ -6,6 +6,7 @@ import org.bukkit.Material;
 import java.util.*;
 
 enum LegacyEnchant {
+    SECOND_WIND(Category.ARMOR), STEADFAST(Category.ARMOR), RIPOSTE(Category.SHIELD), CAREFUL_HANDS(Category.TOOL), PATIENT_ANGLER(Category.FISHING_ROD),
     ABSORB(Category.ARMOR), ANTI_STUN(Category.ARMOR), AUTO_FARM(Category.TOOL), AUTO_REPAIR(Category.TOOL), AUTO_SMELT(Category.TOOL), AXOLOTL_BUFF(Category.ARMOR),
     BARRIER(Category.ARMOR), BLAST(Category.WEAPON), BLEED(Category.WEAPON), BLIND(Category.WEAPON), BLINDING_ARROW(Category.BOW), BLOCK(Category.ARMOR), BURNING(Category.WEAPON),
     COBWEB(Category.WEAPON), CRAVING(Category.WEAPON), CRITICAL(Category.WEAPON), DEATH_ANGEL(Category.ARMOR), DEBUFF(Category.WEAPON),
@@ -32,7 +33,10 @@ enum LegacyEnchant {
         return Arrays.stream(values()).filter(value -> value.name().replace("_", "").equals(compact)).findFirst();
     }
     static List<String> ids() { return Arrays.stream(values()).map(LegacyEnchant::id).toList(); }
-    boolean accepts(Material material) { return switch (category) {
+    boolean accepts(Material material) {
+        if (this == SECOND_WIND) return material.name().endsWith("_CHESTPLATE");
+        if (this == STEADFAST) return material.name().endsWith("_LEGGINGS");
+        return switch (category) {
         case WEAPON -> material.name().endsWith("_SWORD") || material.name().endsWith("_AXE") || material == Material.MACE || material == Material.TRIDENT;
         case TOOL -> material.name().endsWith("_PICKAXE") || material.name().endsWith("_AXE") || material.name().endsWith("_SHOVEL") || material.name().endsWith("_HOE");
         case ARMOR -> material.name().endsWith("_HELMET") || material.name().endsWith("_CHESTPLATE") || material.name().endsWith("_LEGGINGS") || material.name().endsWith("_BOOTS") || material == Material.ELYTRA;

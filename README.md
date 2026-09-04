@@ -1,5 +1,12 @@
 # VelioraEnchant
 
+## New in 1.4.0
+
+Second Wind III, Steadfast III, Riposte III, Careful Hands III and Patient Angler V.
+See [effects, commands and compatibility](docs/wave-one.md). Suite fishing requires
+the matching Suite Patient Angler hook; standalone vanilla fishing remains supported.
+Build/rule tests do not replace a live Java/Bedrock compatibility test.
+
 Custom enchantment plugin for Veliora Gardens, rebuilt for modern Paper. Version 1.1.0 stores its own enchant IDs in item persistent data and runs every effect from VelioraEnchant listeners.
 
 ## Included
