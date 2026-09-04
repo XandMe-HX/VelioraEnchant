@@ -825,9 +825,8 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 0 || args[0].equalsIgnoreCase("help") || args[0].equalsIgnoreCase("guide")) { sendMemberGuide(sender); return true; }
-        if (args.length == 1 && args[0].equalsIgnoreCase("menu") && sender instanceof Player player) {
-            if (!player.hasPermission("velioraenchant.use")) { player.sendMessage(Component.text("Kamu tidak memiliki izin.",NamedTextColor.RED)); return true; }
-            openFishingMenu(player); return true;
+        if (args.length > 0 && args[0].equalsIgnoreCase("menu")) {
+            sendMemberGuide(sender); return true;
         }
         if (!sender.hasPermission("velioraenchant.admin")) { sender.sendMessage(Component.text("Command admin. Gunakan /enchants untuk panduan.",NamedTextColor.RED)); return true; }
         if (args.length == 1 && args[0].equalsIgnoreCase("reload")) { reloadConfig(); distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution")); sender.sendMessage(Component.text("VelioraEnchant reloaded.",NamedTextColor.GREEN)); return true; }
@@ -841,9 +840,8 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         sender.sendMessage(Component.text("Cara pakai: taruh equipment di slot kiri anvil dan buku custom di slot kanan.",NamedTextColor.WHITE));
         sender.sendMessage(Component.text("Buku hanya bisa dipasang pada jenis item yang tertulis di tooltip.",NamedTextColor.YELLOW));
         sender.sendMessage(Component.text("Gabungkan dua level sama untuk menaikkan level, contoh I + I menjadi II.",NamedTextColor.GREEN));
-        sender.sendMessage(Component.text("Gunakan /enchants menu untuk melihat katalog enchant fishing.",NamedTextColor.AQUA));
     }
-    @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) { if(args.length==1)return sender.hasPermission("velioraenchant.admin")?List.of("help","menu","give","reload","rodroll"):List.of("help","menu"); if(args.length==2&&sender.hasPermission("velioraenchant.admin")&&(args[0].equalsIgnoreCase("give")||args[0].equalsIgnoreCase("rodroll")))return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(); if(args.length==3&&sender.hasPermission("velioraenchant.admin")&&args[0].equalsIgnoreCase("give"))return LegacyEnchant.ids(); return List.of(); }
+    @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) { if(args.length==1)return sender.hasPermission("velioraenchant.admin")?List.of("help","give","reload","rodroll"):List.of("help"); if(args.length==2&&sender.hasPermission("velioraenchant.admin")&&(args[0].equalsIgnoreCase("give")||args[0].equalsIgnoreCase("rodroll")))return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList(); if(args.length==3&&sender.hasPermission("velioraenchant.admin")&&args[0].equalsIgnoreCase("give"))return LegacyEnchant.ids(); return List.of(); }
     private static final class FishingMenuHolder implements InventoryHolder { @Override public Inventory getInventory() { return null; } }
     private record EnchantingContext(int bookshelves, long createdAt) {}
 }
