@@ -101,6 +101,23 @@ distribution:
     rarity-cap: EPIC
     master-price: 32
 custom-enchants:
+  second_wind:
+    enabled: true
+    max-level: 3
+    cooldown-ticks: 1800
+  steadfast:
+    enabled: true
+    max-level: 3
+  riposte:
+    enabled: true
+    max-level: 3
+    cooldown-ticks: 200
+  careful_hands:
+    enabled: true
+    max-level: 3
+  patient_angler:
+    enabled: true
+    max-level: 5
   # Other catalogue entries are added automatically with their balanced max level on first startup.
   life_steal: { enabled: true, max-level: 5, heal-per-level: 0.35, cooldown-ticks: 20 }
   auto_smelt: { enabled: true, max-level: 1 }
