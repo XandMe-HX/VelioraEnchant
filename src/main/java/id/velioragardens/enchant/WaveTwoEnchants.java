@@ -80,6 +80,7 @@ final class WaveTwoEnchants implements Listener {
     }
     @EventHandler(priority=EventPriority.MONITOR, ignoreCancelled=true)
     public void hit(EntityDamageByEntityEvent e) {
+        if(ExpansionEnchants.secondary || ExpansionEnchants.generated(e))return;
         if(e.getFinalDamage()<=0 || !(e.getEntity() instanceof LivingEntity target)) return;
         Player p=e.getDamager() instanceof Player direct ? direct : e.getDamager() instanceof Projectile projectile && projectile.getShooter() instanceof Player shooter ? shooter : null;
         if(e.getEntity() instanceof Player victim) combat.put(victim.getUniqueId(),System.currentTimeMillis()+10000);

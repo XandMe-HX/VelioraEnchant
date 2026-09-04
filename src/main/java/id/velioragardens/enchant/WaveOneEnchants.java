@@ -70,6 +70,7 @@ final class WaveOneEnchants implements Listener {
     }
     @EventHandler(priority=EventPriority.MONITOR, ignoreCancelled=true)
     public void chargeRiposte(EntityDamageByEntityEvent event) {
+        if(ExpansionEnchants.secondary || ExpansionEnchants.generated(event))return;
         if (!(event.getEntity() instanceof Player p) || !p.isBlocking() || !blocked(event)) return;
         int level = level(p.getActiveItem(), "riposte");
         if (level > 0 && cooldown(p, "riposte", 200)) {
@@ -79,6 +80,7 @@ final class WaveOneEnchants implements Listener {
     }
     @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
     public void riposte(EntityDamageByEntityEvent event) {
+        if(ExpansionEnchants.secondary || ExpansionEnchants.generated(event))return;
         if (!(event.getDamager() instanceof Player p) || !(event.getEntity() instanceof LivingEntity)
                 || event.getCause() != EntityDamageEvent.DamageCause.ENTITY_ATTACK) return;
         Charge charge = charges.get(p.getUniqueId());

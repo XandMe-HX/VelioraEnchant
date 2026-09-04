@@ -6,6 +6,8 @@ import org.bukkit.Material;
 import java.util.*;
 
 enum LegacyEnchant {
+    HASTE_TOOL(Category.TOOL),
+    ABRASION(Category.WEAPON), ADRENALINE(Category.ARMOR), ARCTIC_FREEZE(Category.WEAPON), ASCEND(Category.WEAPON), AURA(Category.ARMOR), BLAZE_REAPER(Category.WEAPON), BRIGHTNESS(Category.WEAPON), CAFFEINATED(Category.WEAPON), CARVE(Category.WEAPON), CHARGE(Category.WEAPON), CONTAGION(Category.BOW), CUBISM(Category.WEAPON), DOUBLE_BLOW(Category.WEAPON), END_AFFINITY(Category.ARMOR), ENDERBANE(Category.WEAPON), ESCAPE(Category.ARMOR), EXPLOSIVE(Category.BOW), FEATHER_STEP(Category.ARMOR), FINISHING(Category.WEAPON), FIRE_HOOK(Category.FISHING_ROD), FIRST_STRIKE(Category.WEAPON), GETAWAY(Category.ARMOR), INCINERATE(Category.WEAPON), MULTI_SHOT(Category.BOW), NETHER_AFFINITY(Category.ARMOR), NINJA(Category.WEAPON), POISONED_HOOK(Category.FISHING_ROD), POSTPONE(Category.WEAPON), RAVENOUS(Category.WEAPON), REBOUNDING(Category.ARMOR), REPEL(Category.WEAPON), RESONATE(Category.ARMOR), RUMBLE(Category.ARMOR), SCORCHING(Category.ARMOR), SHARPNESS_HOOK(Category.FISHING_ROD), SHURA(Category.WEAPON), SKULLCRUSHER(Category.WEAPON), STARVATION(Category.WEAPON), THOR(Category.WEAPON), ZOMBIE_CRUSHER(Category.WEAPON),
     EMBERGUARD(Category.ARMOR), SOFT_LANDING(Category.ARMOR), TRAILBLAZER(Category.ARMOR), CLEAR_MIND(Category.ARMOR),
     PURSUIT(Category.WEAPON), CRIPPLING_SHOT(Category.BOW), RECOIL_STEP(Category.BOW), TIDAL_STRIDE(Category.WEAPON),
     MEASURED_WORK(Category.TOOL), CULTIVATOR(Category.TOOL), GENTLE_SHEAR(Category.TOOL),
@@ -33,11 +35,13 @@ enum LegacyEnchant {
     String id() { return name().toLowerCase(Locale.ROOT); }
     Category category() { return category; }
     static Optional<LegacyEnchant> find(String id) {
+        id = ExpansionRules.alias(id);
         String compact = id.replace("_", "").toUpperCase(Locale.ROOT);
         return Arrays.stream(values()).filter(value -> value.name().replace("_", "").equals(compact)).findFirst();
     }
     static List<String> ids() { return Arrays.stream(values()).map(LegacyEnchant::id).toList(); }
     boolean accepts(Material material) {
+        if (ExpansionRules.isNew(id())) return ExpansionRules.accepts(id(),material);
         if (this == EMBERGUARD) return material.name().endsWith("_CHESTPLATE");
         if (this == SOFT_LANDING || this == TRAILBLAZER) return material.name().endsWith("_BOOTS");
         if (this == CLEAR_MIND) return material.name().endsWith("_HELMET");
