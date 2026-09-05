@@ -79,7 +79,8 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         migrateLegacyId("lifesteal", "life_steal");
         migrateLegacyId("autosmelt", "auto_smelt");
         if (previousConfigVersion < 5) migrateSafeOverlevelDefaults();
-        getConfig().set("config-version",5);
+        if (previousConfigVersion < 6) migrateFullPowerCustomEnchantDefaults();
+        getConfig().set("config-version",6);
         saveConfig();
         distributionPolicy=new DistributionPolicy(getConfig().getConfigurationSection("distribution"));
         customKey = new NamespacedKey(this, "custom_enchant");
@@ -134,6 +135,12 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         getConfig().set("overlevel.anvil-cost-per-extra-level",15);
         getConfig().set("overlevel.mending-two-repair-multiplier",1.5D);
         getConfig().set("distribution.enchanting-table.maximum-custom-enchants",2);
+    }
+    private void migrateFullPowerCustomEnchantDefaults() {
+        // A complete level-30 table should feel rewarding: two custom enchants are guaranteed,
+        // while the remaining rolls retain decreasing odds like vanilla's extra-enchant rolls.
+        getConfig().set("distribution.enchanting-table.maximum-custom-enchants", 7);
+        getConfig().set("distribution.enchanting-table.full-power-minimum-custom-enchants", 2);
     }
     @Override public void onDisable() { if(expansion!=null)expansion.clear(); if (waveTwo != null) waveTwo.clear(); if (waveOne != null) waveOne.clear(); cooldowns.clear(); windUntil.clear(); repairReady.clear(); enchantingContexts.clear(); veinBreaking.clear(); }
     public double getFishingEnchantBonus(Player player, String id) { return waveTwo == null ? 0 : waveTwo.fishingBonus(player,id); }
@@ -232,7 +239,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
             .toList());
         if (candidates.isEmpty()) return;
         int modifiedPower = modifiedEnchantingPower(event.getExpLevelCost(), enchantability(material));
-        int maximum = Math.max(1, Math.min(3, getConfig().getInt("distribution.enchanting-table.maximum-custom-enchants", 3)));
+        int maximum = Math.max(1, Math.min(7, getConfig().getInt("distribution.enchanting-table.maximum-custom-enchants", 7)));
         int count = fullPower ? Math.max(1, Math.min(maximum,
                 getConfig().getInt("distribution.enchanting-table.full-power-minimum-custom-enchants", 1))) : 1;
         int continuation = modifiedPower;
@@ -763,12 +770,12 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         default -> "Kemampuan khusus Veliora untuk perlengkapanmu.";
     }; }
     private NamespacedKey customKey(String id) { return new NamespacedKey(this, "ce_" + id); }
-    private boolean isCustomBook(ItemStack item) { return item.getType() == Material.ENCHANTED_BOOK && item.getItemMeta() != null && item.getItemMeta().getPersistentDataContainer().has(customKey, PersistentDataType.STRING); }
+    private boolean isCustomBook(ItemStack item) { return item != null && item.getType() == Material.ENCHANTED_BOOK && !customBookIds(item).isEmpty(); }
     private boolean applyCustomBook(ItemStack left, ItemStack right, ItemStack result) {
         if (right.getType() != Material.ENCHANTED_BOOK || right.getItemMeta() == null) return false;
-        String rawId = right.getItemMeta().getPersistentDataContainer().get(customKey, PersistentDataType.STRING);
-        if (rawId == null || LegacyEnchant.find(rawId).isEmpty()) return false;
-        String id=canonicalId(rawId);
+        List<String> bookIds = customBookIds(right);
+        if (bookIds.isEmpty()) return false;
+        String id = bookIds.getFirst();
         if (left.getType()==Material.ENCHANTED_BOOK && isCustomBook(left)) {
             String leftId=left.getItemMeta().getPersistentDataContainer().get(customKey,PersistentDataType.STRING);
             if (leftId==null || !canonicalId(leftId).equals(id)) return false;
@@ -780,7 +787,7 @@ public final class VelioraEnchantPlugin extends JavaPlugin implements Listener, 
         ItemMeta meta = result.getItemMeta(); if (meta == null) return false;
         List<Component> lore = new ArrayList<>(Optional.ofNullable(meta.lore()).orElse(List.of()));
         boolean changed = false;
-        for (String bookId : customBookIds(right)) {
+        for (String bookId : bookIds) {
             if (!canApply(left.getType(), bookId)) continue;
             int incoming = rawCustomLevel(right, bookId); if (incoming < 1) continue;
             int current = rawCustomLevel(left, bookId);

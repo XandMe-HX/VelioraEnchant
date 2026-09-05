@@ -1,6 +1,6 @@
-# VelioraEnchant 1.1.0 - Paper 1.21.8+
+# VelioraEnchant 1.6.2 - Paper 1.21.8+
 # Old V1 names retained as safe enchant books; V2's high-level vanilla system is included too.
-config-version: 5
+config-version: 6
 
 overlevel:
   enabled: true
@@ -71,13 +71,15 @@ distribution:
     base-chance: 0.08
     chance-per-bookshelf: 0.012
     slot-multipliers: [0.45, 0.70, 1.00]
-    maximum-custom-enchants: 2
+    # Full level-30 tables can roll up to seven compatible custom enchants.
+    # Extra rolls become less likely each time; this is never seven guaranteed enchants.
+    maximum-custom-enchants: 7
     # Pilihan ketiga dengan biaya level 30 dan 15 bookshelf selalu memberi
-    # sedikitnya satu custom enchant yang kompatibel. Roll kedua tetap mengikuti
-    # mekanik power vanilla agar hasil bagus tidak menjadi terlalu mudah.
+    # sedikitnya dua custom enchant yang kompatibel. Roll berikutnya tetap mengikuti
+    # mekanik power vanilla dengan peluang yang makin kecil.
     guaranteed-level-cost: 30
     guaranteed-bookshelves: 15
-    full-power-minimum-custom-enchants: 1
+    full-power-minimum-custom-enchants: 2
   structure-loot:
     enabled: true
     chance: 0.0075 # 0.75% per eligible generated container
